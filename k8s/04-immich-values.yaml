@@ -6,7 +6,7 @@ immich:
     library:
       existingClaim: immich-library-pvc
   configuration:
-    TZ: America/Los_Angeles
+    TZ: Australia/Sydney
 
 postgresql:
   enabled: true

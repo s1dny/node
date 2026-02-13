@@ -63,7 +63,7 @@ Pre-set defaults you may optionally change include hostname/timezone, fish as de
 - `cd` -> `z` (zoxide)
 - `v` -> `nvim`
 - `ls` -> `eza`
-- Immich app timezone in `k8s/04-immich-values.yaml` is `America/Los_Angeles` (change it to match your locale if needed)
+- Immich app timezone in `k8s/04-immich-values.yaml` is `Australia/Sydney` (change it to match your locale if needed)
 
 Create Cloudflare tunnel token env file:
 ```bash
