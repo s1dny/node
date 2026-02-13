@@ -77,7 +77,7 @@
       RestartSec = "5s";
     };
     script = ''
-      exec ${pkgs.cloudflared}/bin/cloudflared tunnel run --no-autoupdate --token "$CLOUDFLARE_TUNNEL_TOKEN"
+      exec ${pkgs.cloudflared}/bin/cloudflared tunnel --no-autoupdate run --token "$CLOUDFLARE_TUNNEL_TOKEN"
     '';
   };
 
