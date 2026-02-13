@@ -6,6 +6,11 @@ ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 : "${IMMICH_CHART_VERSION:=0.9.3}"
 : "${IMMICH_APP_VERSION:=v1.136.0}"
 
+# Default to k3s kubeconfig on host systems if caller did not set one.
+if [[ -z "${KUBECONFIG:-}" && -r /etc/rancher/k3s/k3s.yaml ]]; then
+  export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+fi
+
 kubectl apply -f "${ROOT_DIR}/k8s/00-namespaces.yaml"
 kubectl apply -f "${ROOT_DIR}/k8s/01-persistent-volumes.yaml"
 kubectl apply -f "${ROOT_DIR}/k8s/secrets/libsql-auth.yaml"

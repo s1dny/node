@@ -47,8 +47,14 @@ This stack gives you:
    ```
 
 ## 2) Host config edits you must make
-No edits are required in `/etc/nixos/configuration.nix` unless you want different defaults.
-Pre-set defaults include hostname/timezone, SSH key login, fish as default shell, and fish aliases:
+Before first `nixos-rebuild`, edit `/etc/nixos/configuration.nix`:
+```bash
+sudoedit /etc/nixos/configuration.nix
+```
+- Replace `users.users.homelab.openssh.authorizedKeys.keys` with your own SSH public key.
+  This is required because root SSH login is disabled and SSH password auth is disabled.
+
+Pre-set defaults you may optionally change include hostname/timezone, fish as default shell, and fish aliases:
 - `cd` -> `z` (zoxide)
 - `v` -> `nvim`
 - `ls` -> `eza`
@@ -79,17 +85,32 @@ In Cloudflare Zero Trust dashboard:
 4. Save tunnel and copy the install token.
 5. Put that token in `/etc/cloudflared/tunnel-token.env`.
 
+`cloudflare/local-managed-tunnel-config.example.yaml` is only for locally-managed tunnel mode and is not used in this dashboard-token setup.
+
 ## 4) Deploy Kubernetes workloads
-1. Copy this repo to `/etc/nixos/homelab` on the Optiplex.
+1. Copy this repo to `/etc/nixos/homelab` on the Optiplex (if it is not already there from install).
 2. Create real secrets from the examples in `k8s/secrets/*.example.yaml`:
    ```bash
+   cd /etc/nixos/homelab
    cp k8s/secrets/libsql-auth.example.yaml k8s/secrets/libsql-auth.yaml
    cp k8s/secrets/kopia-auth.example.yaml k8s/secrets/kopia-auth.yaml
    cp k8s/secrets/immich-db-secret.example.yaml k8s/secrets/immich-db-secret.yaml
    cp k8s/secrets/immich-redis-secret.example.yaml k8s/secrets/immich-redis-secret.yaml
    ```
    Then edit the copied `*.yaml` files and replace all placeholder values.
-3. Apply core manifests:
+3. Configure `kubectl`/`helm` access for your user:
+   ```bash
+   mkdir -p ~/.kube
+   sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
+   sudo chown "$USER":"$(id -gn)" ~/.kube/config
+   chmod 600 ~/.kube/config
+   ```
+4. Confirm k3s is healthy:
+   ```bash
+   sudo systemctl status k3s --no-pager
+   kubectl get nodes
+   ```
+5. Apply core manifests:
    ```bash
    cd /etc/nixos/homelab
    kubectl apply -f k8s/00-namespaces.yaml
@@ -105,7 +126,7 @@ In Cloudflare Zero Trust dashboard:
    ```bash
    ./scripts/deploy-k8s.sh
    ```
-4. Install Immich chart:
+6. Install Immich chart:
    ```bash
    export IMMICH_CHART_VERSION=0.9.3
    export IMMICH_APP_VERSION=v1.136.0
@@ -182,7 +203,7 @@ kopia snapshot create ~/Documents ~/Pictures ~/Desktop
 
 ## 8) Verification checklist
 ```bash
-systemctl status cloudflared-dashboard-tunnel --no-pager
+sudo systemctl status cloudflared-dashboard-tunnel --no-pager
 kubectl get pods -A
 kubectl -n libsql get ingress,svc,pods
 kubectl -n immich get ingress,svc,pods
