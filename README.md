@@ -121,9 +121,18 @@ sudo chmod 0600 /etc/kopia/kopia.env
 ```
 You can populate `secrets/homelab-secrets.env` on your laptop first, then copy the repo to the host so you do not type secrets directly on the Nix machine.
 
+Optional: host Wi-Fi auto-connect through NetworkManager from the same secrets file:
+```bash
+sudoedit /etc/nixos/homelab/secrets/homelab-secrets.env
+# set:
+# WIFI_SSID=<your-wifi-ssid>
+# WIFI_PASSWORD=<your-wifi-password>
+```
+
 Then apply config:
 ```bash
 sudo nixos-rebuild switch
+sudo systemctl restart wifi-autoconnect
 ```
 
 ## 3) Cloudflare Tunnel + DNS

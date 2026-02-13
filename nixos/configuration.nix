@@ -6,6 +6,7 @@
   ];
 
   networking.hostName = "azalab-0";
+  networking.networkmanager.enable = true;
   time.timeZone = "Australia/Sydney";
 
   boot.loader.systemd-boot.enable = true;
@@ -60,6 +61,71 @@
     extraFlags = toString [
       "--write-kubeconfig-mode=0640"
     ];
+  };
+
+  systemd.services.wifi-autoconnect = {
+    description = "Configure Wi-Fi from homelab secrets";
+    after = [ "NetworkManager.service" ];
+    wants = [ "NetworkManager.service" ];
+    wantedBy = [ "multi-user.target" ];
+    path = [ pkgs.bash pkgs.coreutils pkgs.gawk pkgs.gnugrep pkgs.networkmanager ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+    };
+    script = ''
+      set -euo pipefail
+
+      secrets_file="/etc/nixos/homelab/secrets/homelab-secrets.env"
+      if [[ ! -r "$secrets_file" ]]; then
+        echo "wifi-autoconnect: ${secrets_file} not found; skipping."
+        exit 0
+      fi
+
+      set -a
+      # shellcheck disable=SC1090
+      source "$secrets_file"
+      set +a
+
+      if [[ -z "${WIFI_SSID:-}" || -z "${WIFI_PASSWORD:-}" ]]; then
+        echo "wifi-autoconnect: WIFI_SSID/WIFI_PASSWORD unset; skipping."
+        exit 0
+      fi
+
+      wifi_if=""
+      for _ in $(seq 1 20); do
+        wifi_if="$(${pkgs.networkmanager}/bin/nmcli -t -f DEVICE,TYPE device status | ${pkgs.gawk}/bin/awk -F: '$2 == "wifi" { print $1; exit }')"
+        if [[ -n "$wifi_if" ]]; then
+          break
+        fi
+        sleep 1
+      done
+
+      if [[ -z "$wifi_if" ]]; then
+        echo "wifi-autoconnect: no Wi-Fi interface found; skipping."
+        exit 0
+      fi
+
+      if ${pkgs.networkmanager}/bin/nmcli -t -f NAME connection show | ${pkgs.gnugrep}/bin/grep -Fxq "homelab-wifi"; then
+        ${pkgs.networkmanager}/bin/nmcli connection modify homelab-wifi \
+          connection.interface-name "$wifi_if" \
+          802-11-wireless.ssid "$WIFI_SSID" \
+          wifi-sec.key-mgmt wpa-psk \
+          wifi-sec.psk "$WIFI_PASSWORD" \
+          connection.autoconnect yes
+      else
+        ${pkgs.networkmanager}/bin/nmcli connection add \
+          type wifi \
+          ifname "$wifi_if" \
+          con-name homelab-wifi \
+          ssid "$WIFI_SSID" \
+          wifi-sec.key-mgmt wpa-psk \
+          wifi-sec.psk "$WIFI_PASSWORD" \
+          connection.autoconnect yes
+      fi
+
+      ${pkgs.networkmanager}/bin/nmcli connection up homelab-wifi || true
+    '';
   };
 
   systemd.services.cloudflared-dashboard-tunnel = {
@@ -141,7 +207,7 @@
 
   users.users.homelab = {
     isNormalUser = true;
-    extraGroups = [ "wheel" ];
+    extraGroups = [ "wheel" "networkmanager" ];
     shell = pkgs.fish;
     openssh.authorizedKeys.keys = [
       "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGNLDRhkSlst/ch4vyH8gm3bh79BRB4MIdLiB/jrT5w6 aiden@plarza.com"
