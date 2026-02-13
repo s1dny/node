@@ -1,0 +1,7 @@
+# Real secrets copied from templates
+k8s/secrets/*.yaml
+!k8s/secrets/*.example.yaml
+
+# Host-local environment with credentials
+scripts/kopia.env
+cloudflare/tunnel-token.env

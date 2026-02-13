@@ -1,0 +1,46 @@
+image:
+  tag: __IMMICH_APP_VERSION__
+
+immich:
+  persistence:
+    library:
+      existingClaim: immich-library-pvc
+  configuration:
+    TZ: America/Los_Angeles
+
+postgresql:
+  enabled: true
+  auth:
+    existingSecret: immich-db-secret
+    secretKeys:
+      adminPasswordKey: postgres-password
+      userPasswordKey: password
+      replicationPasswordKey: replication-password
+  primary:
+    persistence:
+      enabled: true
+      existingClaim: immich-postgres-pvc
+
+valkey:
+  enabled: true
+  architecture: standalone
+  auth:
+    enabled: true
+    existingSecret: immich-redis-secret
+    existingSecretPasswordKey: password
+  primary:
+    persistence:
+      enabled: true
+      existingClaim: immich-redis-pvc
+
+ingress:
+  main:
+    enabled: true
+    className: traefik
+    annotations:
+      traefik.ingress.kubernetes.io/router.entrypoints: web
+    hosts:
+      - host: photos.aza.network
+        paths:
+          - path: /
+            pathType: Prefix
