@@ -226,6 +226,12 @@ KOPIA_SERVER_USERNAME=... KOPIA_SERVER_PASSWORD=... ./macbook/backup-macbook.sh
 ```
 
 ## 9) Verification checklist
+Run the health-check helper:
+```bash
+./scripts/check-k8s-health.sh
+```
+
+Or run checks manually:
 ```bash
 sudo systemctl status cloudflared-dashboard-tunnel --no-pager
 kubectl get pods -A

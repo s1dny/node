@@ -45,3 +45,6 @@ kubectl -n immich rollout status statefulset/immich-postgres --timeout=5m
 helm upgrade --install immich oci://ghcr.io/immich-app/immich-charts/immich \
   --namespace immich --create-namespace \
   -f "${ROOT_DIR}/k8s/04-immich-values.yaml"
+
+echo
+echo "  ${ROOT_DIR}/scripts/check-k8s-health.sh"
