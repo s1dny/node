@@ -1,4 +1,4 @@
-# Homelab Setup Guide
+# Homelab Setup Guide (Pinned Flake Workflow)
 
 This stack gives you:
 - NixOS on bare metal (Dell Optiplex 7060)
@@ -11,213 +11,203 @@ This stack gives you:
 - Kopia local encrypted repository on the Optiplex, replicated to Cloudflare R2
 - MacBook backups to Optiplex via Kopia Repository Server through Cloudflare Access
 
+## Architecture
+This setup is clone-free on the host and reproducible by lock file:
+- `/etc/nixos/flake.nix`: small host bootstrap flake
+- `/etc/nixos/flake.lock`: pinned revisions for `nixpkgs` and this homelab repo
+- `/etc/homelab/source`: read-only symlink to the pinned homelab source
+- `/etc/homelab/secrets.env`: single runtime secrets file
+- `/var/lib/homelab/generated/k8s/secrets`: generated Kubernetes secret manifests
+
 ## 0) Prerequisites
 - Domain in Cloudflare: `aza.network`
 - Cloudflare Zero Trust account (`<team>.cloudflareaccess.com`)
-- A dashboard-managed Cloudflare Tunnel token
+- Dashboard-managed Cloudflare Tunnel token
 - NixOS installer USB
-- LAN static IP reservation for Optiplex recommended
 - Console/KVM access for first boot (SSH key auth is enforced)
+- Homelab repo pushed to GitHub
 
-## 0.5) SSH bootstrap + secrets transfer (do this early)
-This repo disables root SSH login and SSH password auth, so set key auth first, then copy secrets over SSH.
+## 0.5) Prepare repo defaults before first install
+Update these in Git before installing:
+- `users.users.homelab.openssh.authorizedKeys.keys` in `nixos/homelab-module.nix`
+- Any default hostname/timezone you want in `nixos/homelab-module.nix`
 
-1. On your laptop, make sure you have an SSH key pair:
-   ```bash
-   ls ~/.ssh/*.pub
-   # If none exist, create one:
-   ssh-keygen -t ed25519 -a 100 -f ~/.ssh/id_ed25519 -C "<you>@<laptop>"
-   ```
-2. Put your laptop public key into the host config:
-   - Edit `users.users.homelab.openssh.authorizedKeys.keys` in `nixos/configuration.nix` (or `/mnt/etc/nixos/homelab/nixos/configuration.nix` during install).
-   - Replace the placeholder key with your own `~/.ssh/*.pub` contents.
-3. Apply config on the host, then verify SSH is listening:
-   ```bash
-   sudo nixos-rebuild switch
-   sudo systemctl status sshd --no-pager
-   hostname -I
-   ```
-4. From your laptop, verify SSH login works:
-   ```bash
-   ssh homelab@<HOST_LAN_IP>
-   ```
-5. Prepare secrets on your laptop and copy them to the host:
-   ```bash
-   cp secrets/homelab-secrets.env.example secrets/homelab-secrets.env
-   chmod 600 secrets/homelab-secrets.env
-   $EDITOR secrets/homelab-secrets.env
-
-   scp secrets/homelab-secrets.env homelab@<HOST_LAN_IP>:/tmp/homelab-secrets.env
-   ```
-6. Install secrets on the host:
-   ```bash
-   sudo install -m 0600 /tmp/homelab-secrets.env /etc/nixos/homelab/secrets/homelab-secrets.env
-   ```
+Commit and push. The host will pin and deploy exactly what is in Git.
 
 ## 1) Install NixOS (fresh machine)
 1. Boot NixOS installer.
-2. Run `disko` partitioning (this will erase the target disk):
+2. Partition using `disko` (this erases the target disk):
    ```bash
    sudo -i
    lsblk -d -o NAME,SIZE,MODEL,SERIAL
    ls -l /dev/disk/by-id
-   # Strongly recommended: set disko.devices.disk.main.device to a stable /dev/disk/by-id/... path.
-   # Double-check it is your target SSD/NVMe and not the installer USB.
-   # Put this repo on the installer at /root/homelab (example):
-   # git clone <YOUR_REPO_URL> /root/homelab
-   cd /root/homelab
-   # Then edit nixos/disko.nix and set disko.devices.disk.main.device.
-   nix --extra-experimental-features "nix-command flakes" run github:nix-community/disko/latest -- --mode disko nixos/disko.nix
+
+   # Fetch pinned disk layout from your repo commit
+   export GH_OWNER="YOUR_GITHUB_OWNER"
+   export GH_REPO="YOUR_REPO"
+   export GH_REV="YOUR_COMMIT_SHA"
+
+   curl -fsSL "https://raw.githubusercontent.com/${GH_OWNER}/${GH_REPO}/${GH_REV}/nixos/disko.nix" -o /tmp/disko.nix
+   # edit /tmp/disko.nix and set disko.devices.disk.main.device correctly
+   $EDITOR /tmp/disko.nix
+
+   nix --extra-experimental-features "nix-command flakes" run github:nix-community/disko/latest -- --mode disko /tmp/disko.nix
    nixos-generate-config --root /mnt
    ```
-3. Copy this project into the target system root:
+3. Create host bootstrap flake at `/mnt/etc/nixos/flake.nix`:
    ```bash
-   mkdir -p /mnt/etc/nixos/homelab
-   cp -a /root/homelab/. /mnt/etc/nixos/homelab/
+   mkdir -p /mnt/etc/nixos
+   cat > /mnt/etc/nixos/flake.nix <<'FLAKE'
+   {
+     description = "Host bootstrap flake for homelab";
+
+     inputs = {
+       nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
+       homelab.url = "github:YOUR_GITHUB_OWNER/YOUR_REPO";
+     };
+
+     outputs = { nixpkgs, homelab, ... }:
+       let
+         system = "x86_64-linux";
+       in {
+         nixosConfigurations.azalab-0 = nixpkgs.lib.nixosSystem {
+           inherit system;
+           modules = [
+             ./hardware-configuration.nix
+             homelab.nixosModules.default
+           ];
+         };
+       };
+   }
+   FLAKE
    ```
-4. Make this repo the single source of truth for host config (no copy drift):
+4. Create and pin lock file:
    ```bash
-   ln -sfn ./homelab/nixos/configuration.nix /mnt/etc/nixos/configuration.nix
-   ln -sfn ../../hardware-configuration.nix /mnt/etc/nixos/homelab/nixos/hardware-configuration.nix
+   cd /mnt/etc/nixos
+   nix flake lock --override-input homelab "github:${GH_OWNER}/${GH_REPO}?rev=${GH_REV}"
    ```
-   Keep `/mnt/etc/nixos/hardware-configuration.nix` as generated by `nixos-generate-config`.
-   The repo file `nixos/hardware-configuration.nix` is a symlink to it.
-5. Install:
+5. Install runtime secrets file:
    ```bash
-   nixos-install
+   install -d -m 0755 /mnt/etc/homelab
+   cp /path/to/homelab-secrets.env /mnt/etc/homelab/secrets.env
+   chmod 0600 /mnt/etc/homelab/secrets.env
+   ```
+6. Install and reboot:
+   ```bash
+   nixos-install --flake /mnt/etc/nixos#azalab-0
    reboot
    ```
 
-## 2) Host config edits you must make
-Before first `nixos-rebuild`, edit `/etc/nixos/homelab/nixos/configuration.nix`:
+## 2) Day-2 updates (reproducible)
+When you change this repo:
+1. Commit + push Git changes.
+2. On host, advance only the pinned homelab input and rebuild:
+   ```bash
+   cd /etc/nixos
+   sudo nix flake lock --update-input homelab
+   sudo nixos-rebuild switch --flake /etc/nixos#azalab-0
+   ```
+
+`/etc/nixos/flake.lock` is the exact deployed source-of-truth.
+
+## 3) Secrets
+Single runtime file:
+- `/etc/homelab/secrets.env`
+- Template is available at `/etc/homelab/secrets.env.example`
+
+Edit secrets:
 ```bash
-sudoedit /etc/nixos/homelab/nixos/configuration.nix
-```
-`/etc/nixos/configuration.nix` is managed as a symlink to that file from install step `1.4`, and enforced declaratively by `systemd-tmpfiles`.
-
-- Replace `users.users.homelab.openssh.authorizedKeys.keys` with your own SSH public key.
-  This is required because root SSH login is disabled and SSH password auth is disabled.
-  If you already did section `0.5`, this is already complete.
-
-Pre-set defaults you may optionally change include hostname/timezone, fish as default shell, and fish aliases:
-- `cd` -> `z` (zoxide)
-- `v` -> `nvim`
-- `ls` -> `eza`
-- Immich app timezone in `k8s/04-immich-values.yaml` is `Australia/Sydney` (change it to match your locale if needed)
-
-Create one central secrets file:
-```bash
-cd /etc/nixos/homelab
-cp secrets/homelab-secrets.env.example secrets/homelab-secrets.env
-chmod 0600 secrets/homelab-secrets.env
-$EDITOR secrets/homelab-secrets.env
-```
-You can populate `secrets/homelab-secrets.env` on your laptop first, then copy the repo to the host so you do not type secrets directly on the Nix machine.
-Host services (`cloudflared`, `kopia-host-backup`, `kopia-r2-sync`, `wifi-autoconnect`) read this file directly.
-Kubernetes secrets are rendered declaratively by `render-k8s-secrets.service` whenever this file changes.
-
-Optional: host Wi-Fi auto-connect through NetworkManager from the same secrets file:
-```bash
-$EDITOR /etc/nixos/homelab/secrets/homelab-secrets.env
-# set:
-# WIFI_SSID=<your-wifi-ssid>
-# WIFI_PASSWORD=<your-wifi-password>
+sudoedit /etc/homelab/secrets.env
 ```
 
-Then apply config:
-```bash
-sudo nixos-rebuild switch
-```
+Optional Wi-Fi values in the same file:
+- `WIFI_SSID`
+- `WIFI_PASSWORD`
 
-## 3) Cloudflare Tunnel + DNS
+On rebuild (or secrets file change), these happen declaratively:
+- `render-k8s-secrets.service` regenerates k8s secrets
+- `wifi-autoconnect.service` updates NetworkManager profile
+- `cloudflared-dashboard-tunnel` is refreshed
+
+## 4) Cloudflare Tunnel + DNS
 In Cloudflare Zero Trust dashboard:
 1. Go to `Networks` -> `Tunnels` -> `Create a tunnel` -> `Cloudflared`.
 2. Name it `azalab-0`.
-3. In `Public hostnames`, add:
+3. Add hostnames:
    - `db.aza.network` -> `http://localhost:80`
    - `photos.aza.network` -> `http://localhost:80`
    - `kopia.aza.network` -> `http://localhost:80`
    - `vault.aza.network` -> `http://localhost:80`
-4. Save tunnel and copy the install token.
-5. Put that token in `/etc/nixos/homelab/secrets/homelab-secrets.env` as `CLOUDFLARE_TUNNEL_TOKEN`.
-   `cloudflared-dashboard-tunnel` is refreshed declaratively when the secrets file changes.
+4. Put token into `/etc/homelab/secrets.env` as `CLOUDFLARE_TUNNEL_TOKEN`.
+5. Validate:
    ```bash
    sudo systemctl status cloudflared-dashboard-tunnel --no-pager
    ```
 
-`cloudflare/local-managed-tunnel-config.example.yaml` is only for locally-managed tunnel mode and is not used in this dashboard-token setup.
-
-## 4) Deploy Kubernetes workloads
-1. Copy this repo to `/etc/nixos/homelab` on the Optiplex (if it is not already there from install).
-2. Verify secrets render is healthy:
+## 5) Deploy Kubernetes workloads
+1. Confirm secrets rendering is healthy:
    ```bash
    sudo systemctl status render-k8s-secrets --no-pager
    ```
-   Quick placeholder check before deploy:
+2. Placeholder check:
    ```bash
    grep -nE "REPLACE_WITH|REPLACE_ME|CHANGE_ME" \
-     secrets/homelab-secrets.env k8s/secrets/*.yaml || true
+     /etc/homelab/secrets.env /var/lib/homelab/generated/k8s/secrets/*.yaml || true
    ```
    Expected: no output.
-3. Confirm k3s is healthy:
+3. Confirm k3s:
    ```bash
    sudo systemctl status k3s --no-pager
    kubectl get nodes
    ```
-   `kubectl`/`helm` access is preconfigured via `KUBECONFIG=/etc/rancher/k3s/k3s.yaml`.
-4. Deploy everything (recommended):
+4. Deploy:
    ```bash
-   cd /etc/nixos/homelab
-   ./scripts/deploy-k8s.sh
+   homelab-deploy-k8s
    ```
 
-## 5) Cloudflare Access policies (edge auth)
-Create two Access applications in Zero Trust dashboard:
-- App 1: `photos.aza.network`
-- App 2: `kopia.aza.network`
+## 6) Cloudflare Access policies (edge auth)
+Create two Access applications:
+- `photos.aza.network`
+- `kopia.aza.network`
 
 Policy recommendation:
-- `Allow` only your identity provider group/emails.
-- Add device posture requirements if you use WARP on trusted devices.
+- Allow only your IdP group/emails.
+- Add device posture checks if you use WARP.
 
-Do not put `vault.aza.network` behind Cloudflare Access if you want to use native Bitwarden clients.
-Use Vaultwarden authentication + 2FA instead.
+Do not put `vault.aza.network` behind Cloudflare Access if you need native Bitwarden clients.
 
-No NixOS `audTag` placeholders are needed with dashboard-managed tunnel mode.
-
-## 6) Vaultwarden first account + hardening
-After deploy completes:
-1. Open `https://vault.aza.network` and create your first account.
-2. Open `https://vault.aza.network/admin` and sign in with `ADMIN_TOKEN` from `k8s/secrets/vaultwarden-secret.yaml`.
+## 7) Vaultwarden first account + hardening
+After deploy:
+1. Open `https://vault.aza.network` and create first account.
+2. Open `https://vault.aza.network/admin` and sign in with `ADMIN_TOKEN` from `/var/lib/homelab/generated/k8s/secrets/vaultwarden-secret.yaml`.
 3. Disable public registrations:
-   - edit `k8s/05-vaultwarden.yaml`
-   - change `SIGNUPS_ALLOWED` from `"true"` to `"false"`
-   - apply it:
+   - edit `/etc/homelab/source/k8s/05-vaultwarden.yaml`
+   - set `SIGNUPS_ALLOWED` to `"false"`
+   - apply:
    ```bash
-   kubectl apply -f /etc/nixos/homelab/k8s/05-vaultwarden.yaml
+   kubectl apply -f /etc/homelab/source/k8s/05-vaultwarden.yaml
    ```
 
-## 7) Kopia: local encrypted repo + R2 replication
-Required values:
-- `KOPIA_REPOSITORY_PASSWORD` (must match `KOPIA_REPOSITORY_PASSWORD` in `k8s/secrets/kopia-auth.yaml`)
+## 8) Kopia: local encrypted repo + R2 replication
+Required values in `/etc/homelab/secrets.env`:
+- `KOPIA_REPOSITORY_PASSWORD` (must match k8s secret)
 - `KOPIA_R2_ACCESS_KEY_ID`
 - `KOPIA_R2_SECRET_ACCESS_KEY`
 - `KOPIA_R2_BUCKET`
 - `KOPIA_R2_ENDPOINT` (format: `https://<accountid>.r2.cloudflarestorage.com`)
 
 Security note:
-- `k8s/03-kopia.yaml` runs Kopia server with `--insecure` and `--disable-csrf-token-checks`.
-- Keep `kopia.aza.network` protected by Cloudflare Access and do not expose the service directly.
+- `/etc/homelab/source/k8s/03-kopia.yaml` uses `--insecure` and `--disable-csrf-token-checks`.
+- Keep `kopia.aza.network` behind Cloudflare Access.
 
-`kopia-host-backup.timer` and `kopia-r2-sync.timer` are enabled declaratively by NixOS.
-
-Run once immediately:
+Timers are declarative (`kopia-host-backup.timer`, `kopia-r2-sync.timer`).
+Run once immediately if needed:
 ```bash
 sudo systemctl start kopia-host-backup.service
 sudo systemctl start kopia-r2-sync.service
 ```
 
-## 8) MacBook backup to Optiplex (through Access)
+## 9) MacBook backup via Access
 On macOS:
 ```bash
 brew install cloudflared kopia
@@ -228,7 +218,7 @@ Start authenticated local tunnel:
 cloudflared access tcp --hostname kopia.aza.network --url localhost:15151
 ```
 
-In another terminal, connect Kopia client to local proxy:
+In another terminal:
 ```bash
 kopia repository connect server \
   --url=http://127.0.0.1:15151 \
@@ -236,25 +226,19 @@ kopia repository connect server \
   --server-username=<KOPIA_SERVER_USERNAME> \
   --server-password=<KOPIA_SERVER_PASSWORD>
 ```
-Use the same `KOPIA_SERVER_USERNAME`/`KOPIA_SERVER_PASSWORD` values configured in `k8s/secrets/kopia-auth.yaml`.
 
 Create snapshots:
 ```bash
 kopia snapshot create ~/Documents ~/Pictures ~/Desktop
 ```
-Optional helpers from this repo:
+
+## 10) Verification
+Run:
 ```bash
-./macbook/connect-kopia-through-access.sh
-KOPIA_SERVER_USERNAME=... KOPIA_SERVER_PASSWORD=... ./macbook/backup-macbook.sh
+homelab-check-k8s-health
 ```
 
-## 9) Verification checklist
-Run the health-check helper:
-```bash
-./scripts/check-k8s-health.sh
-```
-
-Or run checks manually:
+Manual checks:
 ```bash
 sudo systemctl status cloudflared-dashboard-tunnel --no-pager
 kubectl get pods -A
@@ -262,10 +246,6 @@ kubectl -n libsql get ingress,svc,pods
 kubectl -n immich get ingress,svc,pods
 kubectl -n backup get ingress,svc,pods
 kubectl -n vaultwarden get ingress,svc,pods
-```
-
-Backup checks:
-```bash
 sudo journalctl -u kopia-host-backup.service -n 100 --no-pager
 sudo journalctl -u kopia-r2-sync.service -n 100 --no-pager
 ```

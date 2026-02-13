@@ -2,11 +2,14 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-SECRETS_ENV_PATH="${1:-${ROOT_DIR}/secrets/homelab-secrets.env}"
+STATIC_DIR="${HOMELAB_STATIC_DIR:-${ROOT_DIR}}"
+GENERATED_DIR="${HOMELAB_GENERATED_DIR:-/var/lib/homelab/generated}"
+K8S_SECRETS_DIR="${HOMELAB_K8S_SECRETS_DIR:-${GENERATED_DIR}/k8s/secrets}"
+SECRETS_ENV_PATH="${1:-${HOMELAB_SECRETS_ENV:-${STATIC_DIR}/secrets/homelab-secrets.env}}"
 
 if [[ ! -r "${SECRETS_ENV_PATH}" ]]; then
   echo "error: missing secrets env file: ${SECRETS_ENV_PATH}" >&2
-  echo "hint: copy ${ROOT_DIR}/secrets/homelab-secrets.env.example to ${ROOT_DIR}/secrets/homelab-secrets.env and fill it in" >&2
+  echo "hint: copy ${STATIC_DIR}/secrets/homelab-secrets.env.example to ${SECRETS_ENV_PATH} and fill it in" >&2
   exit 1
 fi
 
@@ -63,14 +66,17 @@ yaml_escape() {
 
 write_secret_file() {
   local path="$1"
-  umask 077
+  umask 027
   cat >"${path}"
-  chmod 0600 "${path}"
+  chmod 0640 "${path}"
+  chgrp wheel "${path}" 2>/dev/null || true
 }
 
-mkdir -p "${ROOT_DIR}/k8s/secrets"
+mkdir -p "${K8S_SECRETS_DIR}"
+chmod 0750 "${K8S_SECRETS_DIR}" 2>/dev/null || true
+chgrp wheel "${K8S_SECRETS_DIR}" 2>/dev/null || true
 
-write_secret_file "${ROOT_DIR}/k8s/secrets/libsql-auth.yaml" <<EOF
+write_secret_file "${K8S_SECRETS_DIR}/libsql-auth.yaml" <<EOF
 apiVersion: v1
 kind: Secret
 metadata:
@@ -81,7 +87,7 @@ stringData:
   SQLD_AUTH_JWT_KEY: "$(yaml_escape "${SQLD_AUTH_JWT_KEY}")"
 EOF
 
-write_secret_file "${ROOT_DIR}/k8s/secrets/kopia-auth.yaml" <<EOF
+write_secret_file "${K8S_SECRETS_DIR}/kopia-auth.yaml" <<EOF
 apiVersion: v1
 kind: Secret
 metadata:
@@ -94,7 +100,7 @@ stringData:
   KOPIA_SERVER_PASSWORD: "$(yaml_escape "${KOPIA_SERVER_PASSWORD}")"
 EOF
 
-write_secret_file "${ROOT_DIR}/k8s/secrets/immich-db-secret.yaml" <<EOF
+write_secret_file "${K8S_SECRETS_DIR}/immich-db-secret.yaml" <<EOF
 apiVersion: v1
 kind: Secret
 metadata:
@@ -107,7 +113,7 @@ stringData:
   replication-password: "$(yaml_escape "${IMMICH_DB_REPLICATION_PASSWORD}")"
 EOF
 
-write_secret_file "${ROOT_DIR}/k8s/secrets/immich-redis-secret.yaml" <<EOF
+write_secret_file "${K8S_SECRETS_DIR}/immich-redis-secret.yaml" <<EOF
 apiVersion: v1
 kind: Secret
 metadata:
@@ -118,7 +124,7 @@ stringData:
   password: "$(yaml_escape "${IMMICH_REDIS_PASSWORD}")"
 EOF
 
-write_secret_file "${ROOT_DIR}/k8s/secrets/vaultwarden-secret.yaml" <<EOF
+write_secret_file "${K8S_SECRETS_DIR}/vaultwarden-secret.yaml" <<EOF
 apiVersion: v1
 kind: Secret
 metadata:
@@ -130,4 +136,4 @@ stringData:
 EOF
 
 echo "rendered:"
-echo "  - k8s/secrets/*.yaml"
+echo "  - ${K8S_SECRETS_DIR}/*.yaml"
