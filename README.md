@@ -49,11 +49,9 @@ This repo disables root SSH login and SSH password auth, so set key auth first, 
 
    scp secrets/homelab-secrets.env homelab@<HOST_LAN_IP>:/tmp/homelab-secrets.env
    ```
-6. Install secrets on the host and render generated files:
+6. Install secrets on the host:
    ```bash
    sudo install -m 0600 /tmp/homelab-secrets.env /etc/nixos/homelab/secrets/homelab-secrets.env
-   cd /etc/nixos/homelab
-   ./scripts/render-secrets.sh
    ```
 
 ## 1) Install NixOS (fresh machine)
@@ -95,7 +93,7 @@ Before first `nixos-rebuild`, edit `/etc/nixos/homelab/nixos/configuration.nix`:
 ```bash
 sudoedit /etc/nixos/homelab/nixos/configuration.nix
 ```
-`/etc/nixos/configuration.nix` is managed as a symlink to that file from install step `1.4`.
+`/etc/nixos/configuration.nix` is managed as a symlink to that file from install step `1.4`, and enforced declaratively by `systemd-tmpfiles`.
 
 - Replace `users.users.homelab.openssh.authorizedKeys.keys` with your own SSH public key.
   This is required because root SSH login is disabled and SSH password auth is disabled.
@@ -107,27 +105,20 @@ Pre-set defaults you may optionally change include hostname/timezone, fish as de
 - `ls` -> `eza`
 - Immich app timezone in `k8s/04-immich-values.yaml` is `Australia/Sydney` (change it to match your locale if needed)
 
-Create one central secrets file and render outputs:
+Create one central secrets file:
 ```bash
 cd /etc/nixos/homelab
 cp secrets/homelab-secrets.env.example secrets/homelab-secrets.env
 chmod 0600 secrets/homelab-secrets.env
-sudoedit secrets/homelab-secrets.env
-./scripts/render-secrets.sh
-
-sudo install -d -m 0700 /etc/cloudflared
-sudo cp /etc/nixos/homelab/cloudflare/tunnel-token.env /etc/cloudflared/tunnel-token.env
-sudo chmod 0600 /etc/cloudflared/tunnel-token.env
-
-sudo install -d -m 0700 /etc/kopia
-sudo cp /etc/nixos/homelab/scripts/kopia.env /etc/kopia/kopia.env
-sudo chmod 0600 /etc/kopia/kopia.env
+$EDITOR secrets/homelab-secrets.env
 ```
 You can populate `secrets/homelab-secrets.env` on your laptop first, then copy the repo to the host so you do not type secrets directly on the Nix machine.
+Host services (`cloudflared`, `kopia-host-backup`, `kopia-r2-sync`, `wifi-autoconnect`) read this file directly.
+Kubernetes secrets are rendered declaratively by `render-k8s-secrets.service` whenever this file changes.
 
 Optional: host Wi-Fi auto-connect through NetworkManager from the same secrets file:
 ```bash
-sudoedit /etc/nixos/homelab/secrets/homelab-secrets.env
+$EDITOR /etc/nixos/homelab/secrets/homelab-secrets.env
 # set:
 # WIFI_SSID=<your-wifi-ssid>
 # WIFI_PASSWORD=<your-wifi-password>
@@ -136,7 +127,6 @@ sudoedit /etc/nixos/homelab/secrets/homelab-secrets.env
 Then apply config:
 ```bash
 sudo nixos-rebuild switch
-sudo systemctl restart wifi-autoconnect
 ```
 
 ## 3) Cloudflare Tunnel + DNS
@@ -149,9 +139,9 @@ In Cloudflare Zero Trust dashboard:
    - `kopia.aza.network` -> `http://localhost:80`
    - `vault.aza.network` -> `http://localhost:80`
 4. Save tunnel and copy the install token.
-5. Put that token in `/etc/cloudflared/tunnel-token.env`, then restart cloudflared:
+5. Put that token in `/etc/nixos/homelab/secrets/homelab-secrets.env` as `CLOUDFLARE_TUNNEL_TOKEN`.
+   `cloudflared-dashboard-tunnel` is refreshed declaratively when the secrets file changes.
    ```bash
-   sudo systemctl restart cloudflared-dashboard-tunnel
    sudo systemctl status cloudflared-dashboard-tunnel --no-pager
    ```
 
@@ -159,30 +149,23 @@ In Cloudflare Zero Trust dashboard:
 
 ## 4) Deploy Kubernetes workloads
 1. Copy this repo to `/etc/nixos/homelab` on the Optiplex (if it is not already there from install).
-2. Render all secrets from the single env file:
+2. Verify secrets render is healthy:
    ```bash
-   cd /etc/nixos/homelab
-   ./scripts/render-secrets.sh
+   sudo systemctl status render-k8s-secrets --no-pager
    ```
-   Quick check before deploy:
+   Quick placeholder check before deploy:
    ```bash
    grep -nE "REPLACE_WITH|REPLACE_ME|CHANGE_ME" \
-     secrets/homelab-secrets.env k8s/secrets/*.yaml scripts/kopia.env cloudflare/tunnel-token.env || true
+     secrets/homelab-secrets.env k8s/secrets/*.yaml || true
    ```
    Expected: no output.
-3. Configure `kubectl`/`helm` access for your user:
-   ```bash
-   mkdir -p ~/.kube
-   sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
-   sudo chown "$USER":"$(id -gn)" ~/.kube/config
-   chmod 600 ~/.kube/config
-   ```
-4. Confirm k3s is healthy:
+3. Confirm k3s is healthy:
    ```bash
    sudo systemctl status k3s --no-pager
    kubectl get nodes
    ```
-5. Deploy everything (recommended):
+   `kubectl`/`helm` access is preconfigured via `KUBECONFIG=/etc/rancher/k3s/k3s.yaml`.
+4. Deploy everything (recommended):
    ```bash
    cd /etc/nixos/homelab
    ./scripts/deploy-k8s.sh
@@ -215,12 +198,6 @@ After deploy completes:
    ```
 
 ## 7) Kopia: local encrypted repo + R2 replication
-Install the host env file generated from `secrets/homelab-secrets.env`:
-```bash
-sudo install -d -m 0700 /etc/kopia
-sudo cp /etc/nixos/homelab/scripts/kopia.env /etc/kopia/kopia.env
-sudo chmod 0600 /etc/kopia/kopia.env
-```
 Required values:
 - `KOPIA_REPOSITORY_PASSWORD` (must match `KOPIA_REPOSITORY_PASSWORD` in `k8s/secrets/kopia-auth.yaml`)
 - `KOPIA_R2_ACCESS_KEY_ID`
@@ -232,12 +209,7 @@ Security note:
 - `k8s/03-kopia.yaml` runs Kopia server with `--insecure` and `--disable-csrf-token-checks`.
 - Keep `kopia.aza.network` protected by Cloudflare Access and do not expose the service directly.
 
-Enable timers:
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now kopia-host-backup.timer
-sudo systemctl enable --now kopia-r2-sync.timer
-```
+`kopia-host-backup.timer` and `kopia-r2-sync.timer` are enabled declaratively by NixOS.
 
 Run once immediately:
 ```bash

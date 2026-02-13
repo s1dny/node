@@ -54,13 +54,50 @@
     eza
   ];
 
+  environment.sessionVariables = {
+    KUBECONFIG = "/etc/rancher/k3s/k3s.yaml";
+  };
+
   services.k3s = {
     enable = true;
     role = "server";
     clusterInit = true;
     extraFlags = toString [
       "--write-kubeconfig-mode=0640"
+      "--write-kubeconfig-group=wheel"
     ];
+  };
+
+  systemd.services.render-k8s-secrets = {
+    description = "Render Kubernetes secrets from homelab-secrets.env";
+    wantedBy = [ "multi-user.target" ];
+    path = [ pkgs.bash ];
+    serviceConfig = {
+      Type = "oneshot";
+      User = "homelab";
+      Group = "users";
+      WorkingDirectory = "/etc/nixos/homelab";
+    };
+    script = ''
+      set -euo pipefail
+
+      secrets_file="/etc/nixos/homelab/secrets/homelab-secrets.env"
+      if [[ ! -r "$secrets_file" ]]; then
+        echo "render-k8s-secrets: ${secrets_file} not found; skipping."
+        exit 0
+      fi
+
+      /etc/nixos/homelab/scripts/render-secrets.sh "$secrets_file"
+    '';
+  };
+
+  systemd.paths.render-k8s-secrets = {
+    description = "Watch homelab secrets and render Kubernetes manifests";
+    wantedBy = [ "multi-user.target" ];
+    pathConfig = {
+      PathExists = "/etc/nixos/homelab/secrets/homelab-secrets.env";
+      PathChanged = "/etc/nixos/homelab/secrets/homelab-secrets.env";
+    };
   };
 
   systemd.services.wifi-autoconnect = {
@@ -71,7 +108,6 @@
     path = [ pkgs.bash pkgs.coreutils pkgs.gawk pkgs.gnugrep pkgs.networkmanager ];
     serviceConfig = {
       Type = "oneshot";
-      RemainAfterExit = true;
     };
     script = ''
       set -euo pipefail
@@ -128,6 +164,15 @@
     '';
   };
 
+  systemd.paths.wifi-autoconnect = {
+    description = "Watch homelab secrets and re-apply Wi-Fi profile";
+    wantedBy = [ "multi-user.target" ];
+    pathConfig = {
+      PathExists = "/etc/nixos/homelab/secrets/homelab-secrets.env";
+      PathChanged = "/etc/nixos/homelab/secrets/homelab-secrets.env";
+    };
+  };
+
   systemd.services.cloudflared-dashboard-tunnel = {
     description = "Cloudflare Tunnel (dashboard-managed)";
     after = [ "network-online.target" ];
@@ -138,17 +183,40 @@
       Type = "simple";
       User = "root";
       Group = "root";
-      EnvironmentFile = "/etc/cloudflared/tunnel-token.env";
+      EnvironmentFile = "/etc/nixos/homelab/secrets/homelab-secrets.env";
       Restart = "always";
       RestartSec = "5s";
     };
     script = ''
+      : "''${CLOUDFLARE_TUNNEL_TOKEN:?CLOUDFLARE_TUNNEL_TOKEN is required}"
       exec ${pkgs.cloudflared}/bin/cloudflared tunnel --no-autoupdate run --token "$CLOUDFLARE_TUNNEL_TOKEN"
     '';
   };
 
+  systemd.services.cloudflared-dashboard-tunnel-refresh = {
+    description = "Restart cloudflared when homelab secrets change";
+    path = [ pkgs.systemd ];
+    serviceConfig = {
+      Type = "oneshot";
+    };
+    script = ''
+      systemctl try-restart cloudflared-dashboard-tunnel.service
+    '';
+  };
+
+  systemd.paths.cloudflared-dashboard-tunnel-refresh = {
+    description = "Watch homelab secrets and refresh cloudflared";
+    wantedBy = [ "multi-user.target" ];
+    pathConfig = {
+      PathExists = "/etc/nixos/homelab/secrets/homelab-secrets.env";
+      PathChanged = "/etc/nixos/homelab/secrets/homelab-secrets.env";
+    };
+  };
+
   systemd.tmpfiles.rules = [
-    "d /etc/cloudflared 0700 root root -"
+    "L+ /etc/nixos/configuration.nix - - - - /etc/nixos/homelab/nixos/configuration.nix"
+    "L+ /etc/nixos/homelab/nixos/hardware-configuration.nix - - - - /etc/nixos/hardware-configuration.nix"
+    "Z /etc/nixos/homelab - homelab users -"
     "d /srv/libsql/data 0750 root root -"
     "d /srv/immich/library 0750 root root -"
     "d /srv/immich/postgres 0750 root root -"
@@ -156,7 +224,6 @@
     "d /srv/kopia/repository 0750 root root -"
     "d /srv/vaultwarden/data 0750 root root -"
     "d /var/lib/kopia 0700 root root -"
-    "d /etc/kopia 0700 root root -"
   ];
 
   systemd.services.kopia-host-backup = {
@@ -167,7 +234,7 @@
     serviceConfig = {
       Type = "oneshot";
       User = "root";
-      EnvironmentFile = "/etc/kopia/kopia.env";
+      EnvironmentFile = "/etc/nixos/homelab/secrets/homelab-secrets.env";
       ExecStart = "${pkgs.bash}/bin/bash /etc/nixos/homelab/scripts/kopia-host-backup.sh";
     };
   };
@@ -190,7 +257,7 @@
     serviceConfig = {
       Type = "oneshot";
       User = "root";
-      EnvironmentFile = "/etc/kopia/kopia.env";
+      EnvironmentFile = "/etc/nixos/homelab/secrets/homelab-secrets.env";
       ExecStart = "${pkgs.bash}/bin/bash /etc/nixos/homelab/scripts/kopia-r2-sync.sh";
     };
   };

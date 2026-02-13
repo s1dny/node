@@ -16,15 +16,10 @@ source "${SECRETS_ENV_PATH}"
 set +a
 
 required_vars=(
-  CLOUDFLARE_TUNNEL_TOKEN
   SQLD_AUTH_JWT_KEY
   KOPIA_REPOSITORY_PASSWORD
   KOPIA_SERVER_USERNAME
   KOPIA_SERVER_PASSWORD
-  KOPIA_R2_ACCESS_KEY_ID
-  KOPIA_R2_SECRET_ACCESS_KEY
-  KOPIA_R2_BUCKET
-  KOPIA_R2_ENDPOINT
   IMMICH_DB_POSTGRES_PASSWORD
   IMMICH_DB_PASSWORD
   IMMICH_DB_REPLICATION_PASSWORD
@@ -74,8 +69,6 @@ write_secret_file() {
 }
 
 mkdir -p "${ROOT_DIR}/k8s/secrets"
-mkdir -p "${ROOT_DIR}/scripts"
-mkdir -p "${ROOT_DIR}/cloudflare"
 
 write_secret_file "${ROOT_DIR}/k8s/secrets/libsql-auth.yaml" <<EOF
 apiVersion: v1
@@ -136,19 +129,5 @@ stringData:
   ADMIN_TOKEN: "$(yaml_escape "${VAULTWARDEN_ADMIN_TOKEN}")"
 EOF
 
-write_secret_file "${ROOT_DIR}/scripts/kopia.env" <<EOF
-KOPIA_REPOSITORY_PASSWORD=${KOPIA_REPOSITORY_PASSWORD}
-KOPIA_R2_ACCESS_KEY_ID=${KOPIA_R2_ACCESS_KEY_ID}
-KOPIA_R2_SECRET_ACCESS_KEY=${KOPIA_R2_SECRET_ACCESS_KEY}
-KOPIA_R2_BUCKET=${KOPIA_R2_BUCKET}
-KOPIA_R2_ENDPOINT=${KOPIA_R2_ENDPOINT}
-EOF
-
-write_secret_file "${ROOT_DIR}/cloudflare/tunnel-token.env" <<EOF
-CLOUDFLARE_TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
-EOF
-
 echo "rendered:"
 echo "  - k8s/secrets/*.yaml"
-echo "  - scripts/kopia.env"
-echo "  - cloudflare/tunnel-token.env"
