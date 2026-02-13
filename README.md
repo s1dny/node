@@ -17,6 +17,7 @@ This stack gives you:
 - A dashboard-managed Cloudflare Tunnel token
 - NixOS installer USB
 - LAN static IP reservation for Optiplex recommended
+- Console/KVM access for first boot (SSH key auth is enforced)
 
 ## 1) Install NixOS (fresh machine)
 1. Boot NixOS installer.
@@ -24,6 +25,9 @@ This stack gives you:
    ```bash
    sudo -i
    lsblk -d -o NAME,SIZE,MODEL,SERIAL
+   ls -l /dev/disk/by-id
+   # Strongly recommended: set disko.devices.disk.main.device to a stable /dev/disk/by-id/... path.
+   # Double-check it is your target SSD/NVMe and not the installer USB.
    # Put this repo on the installer at /root/homelab (example):
    # git clone <YOUR_REPO_URL> /root/homelab
    cd /root/homelab
@@ -59,6 +63,7 @@ Pre-set defaults you may optionally change include hostname/timezone, fish as de
 - `cd` -> `z` (zoxide)
 - `v` -> `nvim`
 - `ls` -> `eza`
+- Immich app timezone in `k8s/04-immich-values.yaml` is `America/Los_Angeles` (change it to match your locale if needed)
 
 Create Cloudflare tunnel token env file:
 ```bash
@@ -105,6 +110,11 @@ In Cloudflare Zero Trust dashboard:
    cp k8s/secrets/vaultwarden-secret.example.yaml k8s/secrets/vaultwarden-secret.yaml
    ```
    Then edit the copied `*.yaml` files and replace all placeholder values.
+   Quick check before deploy:
+   ```bash
+   grep -nE "REPLACE_WITH|REPLACE_ME|CHANGE_ME" k8s/secrets/*.yaml || true
+   ```
+   Expected: no output.
 3. Configure `kubectl`/`helm` access for your user:
    ```bash
    mkdir -p ~/.kube
@@ -171,6 +181,10 @@ Required values:
 - `KOPIA_R2_BUCKET`
 - `KOPIA_R2_ENDPOINT` (format: `https://<accountid>.r2.cloudflarestorage.com`)
 
+Security note:
+- `k8s/03-kopia.yaml` runs Kopia server with `--insecure` and `--disable-csrf-token-checks`.
+- Keep `kopia.aza.network` protected by Cloudflare Access and do not expose the service directly.
+
 Enable timers:
 ```bash
 sudo systemctl daemon-reload
@@ -185,7 +199,7 @@ sudo systemctl start kopia-r2-sync.service
 ```
 
 ## 8) MacBook backup to Optiplex (through Access)
-On macOS (Sequoia):
+On macOS:
 ```bash
 brew install cloudflared kopia
 ```
