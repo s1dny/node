@@ -19,6 +19,43 @@ This stack gives you:
 - LAN static IP reservation for Optiplex recommended
 - Console/KVM access for first boot (SSH key auth is enforced)
 
+## 0.5) SSH bootstrap + secrets transfer (do this early)
+This repo disables root SSH login and SSH password auth, so set key auth first, then copy secrets over SSH.
+
+1. On your laptop, make sure you have an SSH key pair:
+   ```bash
+   ls ~/.ssh/*.pub
+   # If none exist, create one:
+   ssh-keygen -t ed25519 -a 100 -f ~/.ssh/id_ed25519 -C "<you>@<laptop>"
+   ```
+2. Put your laptop public key into the host config:
+   - Edit `users.users.homelab.openssh.authorizedKeys.keys` in `nixos/configuration.nix` (or `/mnt/etc/nixos/homelab/nixos/configuration.nix` during install).
+   - Replace the placeholder key with your own `~/.ssh/*.pub` contents.
+3. Apply config on the host, then verify SSH is listening:
+   ```bash
+   sudo nixos-rebuild switch
+   sudo systemctl status sshd --no-pager
+   hostname -I
+   ```
+4. From your laptop, verify SSH login works:
+   ```bash
+   ssh homelab@<HOST_LAN_IP>
+   ```
+5. Prepare secrets on your laptop and copy them to the host:
+   ```bash
+   cp secrets/homelab-secrets.env.example secrets/homelab-secrets.env
+   chmod 600 secrets/homelab-secrets.env
+   $EDITOR secrets/homelab-secrets.env
+
+   scp secrets/homelab-secrets.env homelab@<HOST_LAN_IP>:/tmp/homelab-secrets.env
+   ```
+6. Install secrets on the host and render generated files:
+   ```bash
+   sudo install -m 0600 /tmp/homelab-secrets.env /etc/nixos/homelab/secrets/homelab-secrets.env
+   cd /etc/nixos/homelab
+   ./scripts/render-secrets.sh
+   ```
+
 ## 1) Install NixOS (fresh machine)
 1. Boot NixOS installer.
 2. Run `disko` partitioning (this will erase the target disk):
@@ -58,6 +95,7 @@ sudoedit /etc/nixos/configuration.nix
 ```
 - Replace `users.users.homelab.openssh.authorizedKeys.keys` with your own SSH public key.
   This is required because root SSH login is disabled and SSH password auth is disabled.
+  If you already did section `0.5`, this is already complete.
 
 Pre-set defaults you may optionally change include hostname/timezone, fish as default shell, and fish aliases:
 - `cd` -> `z` (zoxide)
