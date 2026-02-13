@@ -38,7 +38,9 @@ kubectl apply -f "${ROOT_DIR}/k8s/secrets/immich-redis-secret.yaml"
 kubectl apply -f "${ROOT_DIR}/k8s/secrets/vaultwarden-secret.yaml"
 kubectl apply -f "${ROOT_DIR}/k8s/02-libsql.yaml"
 kubectl apply -f "${ROOT_DIR}/k8s/03-kopia.yaml"
+kubectl apply -f "${ROOT_DIR}/k8s/04-immich-postgres.yaml"
 kubectl apply -f "${ROOT_DIR}/k8s/05-vaultwarden.yaml"
+kubectl -n immich rollout status statefulset/immich-postgres --timeout=5m
 
 helm upgrade --install immich oci://ghcr.io/immich-app/immich-charts/immich \
   --namespace immich --create-namespace \

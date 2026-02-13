@@ -1,33 +1,32 @@
+controllers:
+  main:
+    containers:
+      main:
+        env:
+          TZ: Australia/Sydney
+          DB_HOSTNAME: immich-postgres
+          DB_PORT: "5432"
+          DB_USERNAME: postgres
+          DB_DATABASE_NAME: immich
+          DB_PASSWORD:
+            valueFrom:
+              secretKeyRef:
+                name: immich-db-secret
+                key: postgres-password
+          REDIS_HOSTNAME: immich-valkey
+          REDIS_PORT: "6379"
+
 immich:
   persistence:
     library:
       existingClaim: immich-library-pvc
-  configuration:
-    TZ: Australia/Sydney
-
-postgresql:
-  enabled: true
-  auth:
-    existingSecret: immich-db-secret
-    secretKeys:
-      adminPasswordKey: postgres-password
-      userPasswordKey: password
-      replicationPasswordKey: replication-password
-  primary:
-    persistence:
-      enabled: true
-      existingClaim: immich-postgres-pvc
 
 valkey:
   enabled: true
-  architecture: standalone
-  auth:
-    enabled: true
-    existingSecret: immich-redis-secret
-    existingSecretPasswordKey: password
-  primary:
-    persistence:
+  persistence:
+    data:
       enabled: true
+      type: persistentVolumeClaim
       existingClaim: immich-redis-pvc
 
 ingress:
