@@ -3,9 +3,6 @@ set -euo pipefail
 
 ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 
-: "${IMMICH_CHART_VERSION:=0.9.3}"
-: "${IMMICH_APP_VERSION:=v1.136.0}"
-
 # Default to k3s kubeconfig on host systems if caller did not set one.
 if [[ -z "${KUBECONFIG:-}" && -r /etc/rancher/k3s/k3s.yaml ]]; then
   export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
@@ -43,8 +40,6 @@ kubectl apply -f "${ROOT_DIR}/k8s/02-libsql.yaml"
 kubectl apply -f "${ROOT_DIR}/k8s/03-kopia.yaml"
 kubectl apply -f "${ROOT_DIR}/k8s/05-vaultwarden.yaml"
 
-sed "s/__IMMICH_APP_VERSION__/${IMMICH_APP_VERSION}/" "${ROOT_DIR}/k8s/04-immich-values.yaml" \
-  | helm upgrade --install immich oci://ghcr.io/immich-app/immich-charts/immich \
-      --version "${IMMICH_CHART_VERSION}" \
-      --namespace immich --create-namespace \
-      -f -
+helm upgrade --install immich oci://ghcr.io/immich-app/immich-charts/immich \
+  --namespace immich --create-namespace \
+  -f "${ROOT_DIR}/k8s/04-immich-values.yaml"
