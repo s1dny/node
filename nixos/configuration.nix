@@ -41,6 +41,9 @@
     curl
     jq
     yq-go
+    rustc
+    cargo
+    python3
     kubectl
     kubernetes-helm
     k3s
@@ -85,6 +88,7 @@
     "d /srv/immich/postgres 0750 root root -"
     "d /srv/immich/redis 0750 root root -"
     "d /srv/kopia/repository 0750 root root -"
+    "d /srv/vaultwarden/data 0750 root root -"
     "d /var/lib/kopia 0700 root root -"
     "d /etc/kopia 0700 root root -"
   ];

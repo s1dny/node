@@ -17,7 +17,8 @@ kopia policy set --global \
   --keep-weekly 12 \
   --keep-monthly 12
 
-SOURCES=(/etc/nixos /srv/libsql/data /srv/immich/library)
+# Backup full service directories (excluding /srv/kopia to avoid backing up the backup repository itself).
+SOURCES=(/etc/nixos /srv/libsql /srv/immich /srv/vaultwarden)
 if [[ -n "${KOPIA_HOST_SOURCES:-}" ]]; then
   # shellcheck disable=SC2206
   SOURCES=(${KOPIA_HOST_SOURCES})

@@ -23,4 +23,7 @@ ingress:
         audTag:
           - REPLACE_WITH_KOPIA_AUD_TAG
 
+  - hostname: vault.aza.network
+    service: http://127.0.0.1:80
+
   - service: http_status:404

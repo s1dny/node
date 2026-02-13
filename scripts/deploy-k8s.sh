@@ -17,8 +17,10 @@ kubectl apply -f "${ROOT_DIR}/k8s/secrets/libsql-auth.yaml"
 kubectl apply -f "${ROOT_DIR}/k8s/secrets/kopia-auth.yaml"
 kubectl apply -f "${ROOT_DIR}/k8s/secrets/immich-db-secret.yaml"
 kubectl apply -f "${ROOT_DIR}/k8s/secrets/immich-redis-secret.yaml"
+kubectl apply -f "${ROOT_DIR}/k8s/secrets/vaultwarden-secret.yaml"
 kubectl apply -f "${ROOT_DIR}/k8s/02-libsql.yaml"
 kubectl apply -f "${ROOT_DIR}/k8s/03-kopia.yaml"
+kubectl apply -f "${ROOT_DIR}/k8s/05-vaultwarden.yaml"
 
 sed "s/__IMMICH_APP_VERSION__/${IMMICH_APP_VERSION}/" "${ROOT_DIR}/k8s/04-immich-values.yaml" \
   | helm upgrade --install immich oci://ghcr.io/immich-app/immich-charts/immich \

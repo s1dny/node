@@ -4,7 +4,7 @@ metadata:
   name: libsql-data-pv
 spec:
   capacity:
-    storage: 200Gi
+    storage: 100Gi
   accessModes:
     - ReadWriteOnce
   persistentVolumeReclaimPolicy: Retain
@@ -24,7 +24,7 @@ spec:
   storageClassName: ""
   resources:
     requests:
-      storage: 200Gi
+      storage: 100Gi
   volumeName: libsql-data-pv
 ---
 apiVersion: v1
@@ -33,7 +33,7 @@ metadata:
   name: immich-library-pv
 spec:
   capacity:
-    storage: 2Ti
+    storage: 1Ti
   accessModes:
     - ReadWriteOnce
   persistentVolumeReclaimPolicy: Retain
@@ -53,7 +53,7 @@ spec:
   storageClassName: ""
   resources:
     requests:
-      storage: 2Ti
+      storage: 1Ti
   volumeName: immich-library-pv
 ---
 apiVersion: v1
@@ -120,7 +120,7 @@ metadata:
   name: kopia-repo-pv
 spec:
   capacity:
-    storage: 4Ti
+    storage: 1Ti
   accessModes:
     - ReadWriteOnce
   persistentVolumeReclaimPolicy: Retain
@@ -140,5 +140,34 @@ spec:
   storageClassName: ""
   resources:
     requests:
-      storage: 4Ti
+      storage: 1Ti
   volumeName: kopia-repo-pv
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: vaultwarden-data-pv
+spec:
+  capacity:
+    storage: 20Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  hostPath:
+    path: /srv/vaultwarden/data
+    type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vaultwarden-data-pvc
+  namespace: vaultwarden
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: ""
+  resources:
+    requests:
+      storage: 20Gi
+  volumeName: vaultwarden-data-pv

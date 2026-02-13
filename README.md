@@ -1,12 +1,13 @@
-# Optiplex 7060 Homelab (NixOS + k3s + Cloudflare Zero Trust + Kopia)
+# Homelab Setup Guide
 
 This stack gives you:
 - NixOS on bare metal (Dell Optiplex 7060)
 - k3s for orchestration
-- Cloudflare Tunnel for inbound traffic (`db`, `photos`, `kopia`)
+- Cloudflare Tunnel for inbound traffic (`db`, `photos`, `kopia`, `vault`)
 - Cloudflare Access policies for `photos` and `kopia`
 - `libsql` in k3s at `https://db.aza.network`
 - Immich in k3s at `https://photos.aza.network`
+- Vaultwarden in k3s at `https://vault.aza.network`
 - Kopia local encrypted repository on the Optiplex, replicated to Cloudflare R2
 - MacBook backups to Optiplex via Kopia Repository Server through Cloudflare Access
 
@@ -82,8 +83,13 @@ In Cloudflare Zero Trust dashboard:
    - `db.aza.network` -> `http://localhost:80`
    - `photos.aza.network` -> `http://localhost:80`
    - `kopia.aza.network` -> `http://localhost:80`
+   - `vault.aza.network` -> `http://localhost:80`
 4. Save tunnel and copy the install token.
-5. Put that token in `/etc/cloudflared/tunnel-token.env`.
+5. Put that token in `/etc/cloudflared/tunnel-token.env`, then restart cloudflared:
+   ```bash
+   sudo systemctl restart cloudflared-dashboard-tunnel
+   sudo systemctl status cloudflared-dashboard-tunnel --no-pager
+   ```
 
 `cloudflare/local-managed-tunnel-config.example.yaml` is only for locally-managed tunnel mode and is not used in this dashboard-token setup.
 
@@ -96,6 +102,7 @@ In Cloudflare Zero Trust dashboard:
    cp k8s/secrets/kopia-auth.example.yaml k8s/secrets/kopia-auth.yaml
    cp k8s/secrets/immich-db-secret.example.yaml k8s/secrets/immich-db-secret.yaml
    cp k8s/secrets/immich-redis-secret.example.yaml k8s/secrets/immich-redis-secret.yaml
+   cp k8s/secrets/vaultwarden-secret.example.yaml k8s/secrets/vaultwarden-secret.yaml
    ```
    Then edit the copied `*.yaml` files and replace all placeholder values.
 3. Configure `kubectl`/`helm` access for your user:
@@ -110,32 +117,18 @@ In Cloudflare Zero Trust dashboard:
    sudo systemctl status k3s --no-pager
    kubectl get nodes
    ```
-5. Apply core manifests:
+5. Deploy everything (recommended):
    ```bash
    cd /etc/nixos/homelab
-   kubectl apply -f k8s/00-namespaces.yaml
-   kubectl apply -f k8s/01-persistent-volumes.yaml
-   kubectl apply -f k8s/secrets/libsql-auth.yaml
-   kubectl apply -f k8s/secrets/kopia-auth.yaml
-   kubectl apply -f k8s/secrets/immich-db-secret.yaml
-   kubectl apply -f k8s/secrets/immich-redis-secret.yaml
-   kubectl apply -f k8s/02-libsql.yaml
-   kubectl apply -f k8s/03-kopia.yaml
-   ```
-   Or run:
-   ```bash
    ./scripts/deploy-k8s.sh
    ```
-6. Install Immich chart:
+   This applies namespaces/PVs/secrets/workloads and installs Immich.
+   Optional version overrides:
    ```bash
-   export IMMICH_CHART_VERSION=0.9.3
-   export IMMICH_APP_VERSION=v1.136.0
-   sed "s/__IMMICH_APP_VERSION__/${IMMICH_APP_VERSION}/" k8s/04-immich-values.yaml \
-     | helm upgrade --install immich oci://ghcr.io/immich-app/immich-charts/immich \
-       --version "${IMMICH_CHART_VERSION}" \
-       --namespace immich --create-namespace \
-       -f -
+   IMMICH_CHART_VERSION=0.9.3 IMMICH_APP_VERSION=v1.136.0 ./scripts/deploy-k8s.sh
    ```
+   Note: `k8s/02-libsql.yaml`, `k8s/03-kopia.yaml`, and `k8s/05-vaultwarden.yaml` currently use `:latest` container tags.
+   Pin explicit image versions for repeatable upgrades.
 
 ## 5) Cloudflare Access policies (edge auth)
 Create two Access applications in Zero Trust dashboard:
@@ -146,9 +139,24 @@ Policy recommendation:
 - `Allow` only your identity provider group/emails.
 - Add device posture requirements if you use WARP on trusted devices.
 
+Do not put `vault.aza.network` behind Cloudflare Access if you want to use native Bitwarden clients.
+Use Vaultwarden authentication + 2FA instead.
+
 No NixOS `audTag` placeholders are needed with dashboard-managed tunnel mode.
 
-## 6) Kopia: local encrypted repo + R2 replication
+## 6) Vaultwarden first account + hardening
+After deploy completes:
+1. Open `https://vault.aza.network` and create your first account.
+2. Open `https://vault.aza.network/admin` and sign in with `ADMIN_TOKEN` from `k8s/secrets/vaultwarden-secret.yaml`.
+3. Disable public registrations:
+   - edit `k8s/05-vaultwarden.yaml`
+   - change `SIGNUPS_ALLOWED` from `"true"` to `"false"`
+   - apply it:
+   ```bash
+   kubectl apply -f /etc/nixos/homelab/k8s/05-vaultwarden.yaml
+   ```
+
+## 7) Kopia: local encrypted repo + R2 replication
 Create host env file:
 ```bash
 sudo install -d -m 0700 /etc/kopia
@@ -157,7 +165,7 @@ sudo chmod 0600 /etc/kopia/kopia.env
 sudoedit /etc/kopia/kopia.env
 ```
 Required values:
-- `KOPIA_REPOSITORY_PASSWORD`
+- `KOPIA_REPOSITORY_PASSWORD` (must match `KOPIA_REPOSITORY_PASSWORD` in `k8s/secrets/kopia-auth.yaml`)
 - `KOPIA_R2_ACCESS_KEY_ID`
 - `KOPIA_R2_SECRET_ACCESS_KEY`
 - `KOPIA_R2_BUCKET`
@@ -176,7 +184,7 @@ sudo systemctl start kopia-host-backup.service
 sudo systemctl start kopia-r2-sync.service
 ```
 
-## 7) MacBook backup to Optiplex (through Access)
+## 8) MacBook backup to Optiplex (through Access)
 On macOS (Sequoia):
 ```bash
 brew install cloudflared kopia
@@ -195,19 +203,26 @@ kopia repository connect server \
   --server-username=<KOPIA_SERVER_USERNAME> \
   --server-password=<KOPIA_SERVER_PASSWORD>
 ```
+Use the same `KOPIA_SERVER_USERNAME`/`KOPIA_SERVER_PASSWORD` values configured in `k8s/secrets/kopia-auth.yaml`.
 
 Create snapshots:
 ```bash
 kopia snapshot create ~/Documents ~/Pictures ~/Desktop
 ```
+Optional helpers from this repo:
+```bash
+./macbook/connect-kopia-through-access.sh
+KOPIA_SERVER_USERNAME=... KOPIA_SERVER_PASSWORD=... ./macbook/backup-macbook.sh
+```
 
-## 8) Verification checklist
+## 9) Verification checklist
 ```bash
 sudo systemctl status cloudflared-dashboard-tunnel --no-pager
 kubectl get pods -A
 kubectl -n libsql get ingress,svc,pods
 kubectl -n immich get ingress,svc,pods
 kubectl -n backup get ingress,svc,pods
+kubectl -n vaultwarden get ingress,svc,pods
 ```
 
 Backup checks:
