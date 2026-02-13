@@ -83,7 +83,7 @@
 
       secrets_file="/etc/nixos/homelab/secrets/homelab-secrets.env"
       if [[ ! -r "$secrets_file" ]]; then
-        echo "render-k8s-secrets: ${secrets_file} not found; skipping."
+        echo "render-k8s-secrets: ''${secrets_file} not found; skipping."
         exit 0
       fi
 
@@ -114,7 +114,7 @@
 
       secrets_file="/etc/nixos/homelab/secrets/homelab-secrets.env"
       if [[ ! -r "$secrets_file" ]]; then
-        echo "wifi-autoconnect: ${secrets_file} not found; skipping."
+        echo "wifi-autoconnect: ''${secrets_file} not found; skipping."
         exit 0
       fi
 
@@ -123,7 +123,7 @@
       source "$secrets_file"
       set +a
 
-      if [[ -z "${WIFI_SSID:-}" || -z "${WIFI_PASSWORD:-}" ]]; then
+      if [[ -z "''${WIFI_SSID:-}" || -z "''${WIFI_PASSWORD:-}" ]]; then
         echo "wifi-autoconnect: WIFI_SSID/WIFI_PASSWORD unset; skipping."
         exit 0
       fi
