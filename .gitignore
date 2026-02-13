@@ -2,6 +2,9 @@
 k8s/secrets/*.yaml
 !k8s/secrets/*.example.yaml
 
+# Centralized secret source file
+secrets/homelab-secrets.env
+
 # Host-local environment with credentials
 scripts/kopia.env
 cloudflare/tunnel-token.env

@@ -65,15 +65,23 @@ Pre-set defaults you may optionally change include hostname/timezone, fish as de
 - `ls` -> `eza`
 - Immich app timezone in `k8s/04-immich-values.yaml` is `Australia/Sydney` (change it to match your locale if needed)
 
-Create Cloudflare tunnel token env file:
+Create one central secrets file and render outputs:
 ```bash
+cd /etc/nixos/homelab
+cp secrets/homelab-secrets.env.example secrets/homelab-secrets.env
+chmod 0600 secrets/homelab-secrets.env
+sudoedit secrets/homelab-secrets.env
+./scripts/render-secrets.sh
+
 sudo install -d -m 0700 /etc/cloudflared
-sudo cp /etc/nixos/homelab/cloudflare/tunnel-token.env.example /etc/cloudflared/tunnel-token.env
-sudoedit /etc/cloudflared/tunnel-token.env
-# put exactly one line:
-# CLOUDFLARE_TUNNEL_TOKEN=PASTE_YOUR_TOKEN_HERE
+sudo cp /etc/nixos/homelab/cloudflare/tunnel-token.env /etc/cloudflared/tunnel-token.env
 sudo chmod 0600 /etc/cloudflared/tunnel-token.env
+
+sudo install -d -m 0700 /etc/kopia
+sudo cp /etc/nixos/homelab/scripts/kopia.env /etc/kopia/kopia.env
+sudo chmod 0600 /etc/kopia/kopia.env
 ```
+You can populate `secrets/homelab-secrets.env` on your laptop first, then copy the repo to the host so you do not type secrets directly on the Nix machine.
 
 Then apply config:
 ```bash
@@ -100,19 +108,15 @@ In Cloudflare Zero Trust dashboard:
 
 ## 4) Deploy Kubernetes workloads
 1. Copy this repo to `/etc/nixos/homelab` on the Optiplex (if it is not already there from install).
-2. Create real secrets from the examples in `k8s/secrets/*.example.yaml`:
+2. Render all secrets from the single env file:
    ```bash
    cd /etc/nixos/homelab
-   cp k8s/secrets/libsql-auth.example.yaml k8s/secrets/libsql-auth.yaml
-   cp k8s/secrets/kopia-auth.example.yaml k8s/secrets/kopia-auth.yaml
-   cp k8s/secrets/immich-db-secret.example.yaml k8s/secrets/immich-db-secret.yaml
-   cp k8s/secrets/immich-redis-secret.example.yaml k8s/secrets/immich-redis-secret.yaml
-   cp k8s/secrets/vaultwarden-secret.example.yaml k8s/secrets/vaultwarden-secret.yaml
+   ./scripts/render-secrets.sh
    ```
-   Then edit the copied `*.yaml` files and replace all placeholder values.
    Quick check before deploy:
    ```bash
-   grep -nE "REPLACE_WITH|REPLACE_ME|CHANGE_ME" k8s/secrets/*.yaml || true
+   grep -nE "REPLACE_WITH|REPLACE_ME|CHANGE_ME" \
+     secrets/homelab-secrets.env k8s/secrets/*.yaml scripts/kopia.env cloudflare/tunnel-token.env || true
    ```
    Expected: no output.
 3. Configure `kubectl`/`helm` access for your user:
@@ -132,13 +136,6 @@ In Cloudflare Zero Trust dashboard:
    cd /etc/nixos/homelab
    ./scripts/deploy-k8s.sh
    ```
-   This applies namespaces/PVs/secrets/workloads and installs Immich.
-   Optional version overrides:
-   ```bash
-   IMMICH_CHART_VERSION=0.9.3 IMMICH_APP_VERSION=v1.136.0 ./scripts/deploy-k8s.sh
-   ```
-   Note: `k8s/02-libsql.yaml`, `k8s/03-kopia.yaml`, and `k8s/05-vaultwarden.yaml` currently use `:latest` container tags.
-   Pin explicit image versions for repeatable upgrades.
 
 ## 5) Cloudflare Access policies (edge auth)
 Create two Access applications in Zero Trust dashboard:
@@ -167,12 +164,11 @@ After deploy completes:
    ```
 
 ## 7) Kopia: local encrypted repo + R2 replication
-Create host env file:
+Install the host env file generated from `secrets/homelab-secrets.env`:
 ```bash
 sudo install -d -m 0700 /etc/kopia
-sudo cp /etc/nixos/homelab/scripts/kopia.env.example /etc/kopia/kopia.env
+sudo cp /etc/nixos/homelab/scripts/kopia.env /etc/kopia/kopia.env
 sudo chmod 0600 /etc/kopia/kopia.env
-sudoedit /etc/kopia/kopia.env
 ```
 Required values:
 - `KOPIA_REPOSITORY_PASSWORD` (must match `KOPIA_REPOSITORY_PASSWORD` in `k8s/secrets/kopia-auth.yaml`)
