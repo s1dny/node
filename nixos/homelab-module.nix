@@ -6,7 +6,7 @@ let
   homelabGeneratedDir = "/var/lib/homelab/generated";
   homelabK8sSecretsDir = "${homelabGeneratedDir}/k8s/secrets";
   defaultHostHostname = "azalab-0";
-  defaultHostUsername = "homelab";
+  defaultHostUsername = "aiden";
   defaultHostAuthorizedKeys = [
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGNLDRhkSlst/ch4vyH8gm3bh79BRB4MIdLiB/jrT5w6 aiden@plarza.com"
   ];
@@ -245,8 +245,8 @@ in
       source "$secrets_file"
       set +a
 
-      host_hostname="${HOST_HOSTNAME:-${defaultHostHostname}}"
-      host_username="${HOST_USERNAME:-${defaultHostUsername}}"
+      host_hostname="''${HOST_HOSTNAME:-${defaultHostHostname}}"
+      host_username="''${HOST_USERNAME:-${defaultHostUsername}}"
 
       if [[ ! "$host_hostname" =~ ^[a-zA-Z0-9.-]+$ ]]; then
         echo "host-identity-sync: invalid HOST_HOSTNAME '$host_hostname'; skipping hostname update."
