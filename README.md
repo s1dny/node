@@ -53,15 +53,15 @@ Clone-free on the host, reproducible by lock file:
 5. After reboot, find the machine's IP (check your router or run `ip a` on the console), then SSH in. Your public key is hardcoded in `nixos/homelab-module.nix` so no password is needed:
    ```bash
    ssh aiden@<IP>
+   passwd  # set a password for user aiden so sudo works in later steps
    ```
    Do everything from here on over SSH.
 6. From your local machine (in the root of your clone of this repo), create a secrets file from the template and copy it over:
    ```bash
-   cp secrets/secrets.env.example secrets.env
-   vi secrets.env  # fill in all values
-   scp secrets.env aiden@<IP>:/tmp/secrets.env
+   cp secrets/secrets.env.example secrets/secrets.env
+   vi secrets/secrets.env  # fill in values needed for features you are enabling
+   scp secrets/secrets.env aiden@<IP>:/tmp/secrets.env
    ```
-   All vars in the template are required unless marked optional. `render-k8s-secrets` will fail if any are missing.
 7. On the server, install secrets and rebuild:
    ```bash
    sudo mv /tmp/secrets.env /etc/homelab/secrets.env
