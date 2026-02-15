@@ -3,7 +3,7 @@ k8s/secrets/*.yaml
 !k8s/secrets/*.example.yaml
 
 # Centralized secret source file
-secrets/homelab-secrets.env
+secrets/secrets.env
 
 # Legacy/generated host-local credentials (kept ignored for safety)
 scripts/kopia.env

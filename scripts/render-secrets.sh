@@ -5,11 +5,11 @@ ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 STATIC_DIR="${HOMELAB_STATIC_DIR:-${ROOT_DIR}}"
 GENERATED_DIR="${HOMELAB_GENERATED_DIR:-/var/lib/homelab/generated}"
 K8S_SECRETS_DIR="${HOMELAB_K8S_SECRETS_DIR:-${GENERATED_DIR}/k8s/secrets}"
-SECRETS_ENV_PATH="${1:-${HOMELAB_SECRETS_ENV:-${STATIC_DIR}/secrets/homelab-secrets.env}}"
+SECRETS_ENV_PATH="${1:-${HOMELAB_SECRETS_ENV:-${STATIC_DIR}/secrets/secrets.env}}"
 
 if [[ ! -r "${SECRETS_ENV_PATH}" ]]; then
   echo "error: missing secrets env file: ${SECRETS_ENV_PATH}" >&2
-  echo "hint: copy ${STATIC_DIR}/secrets/homelab-secrets.env.example to ${SECRETS_ENV_PATH} and fill it in" >&2
+  echo "hint: copy ${STATIC_DIR}/secrets/secrets.env.example to ${SECRETS_ENV_PATH} and fill it in" >&2
   exit 1
 fi
 
@@ -17,6 +17,8 @@ set -a
 # shellcheck disable=SC1090
 source "${SECRETS_ENV_PATH}"
 set +a
+
+KOPIA_SERVER_HOSTNAME="${KOPIA_SERVER_HOSTNAME:-kopia.aza.network}"
 
 required_vars=(
   SQLD_AUTH_JWT_KEY
@@ -96,6 +98,7 @@ metadata:
 type: Opaque
 stringData:
   KOPIA_REPOSITORY_PASSWORD: "$(yaml_escape "${KOPIA_REPOSITORY_PASSWORD}")"
+  KOPIA_SERVER_HOSTNAME: "$(yaml_escape "${KOPIA_SERVER_HOSTNAME}")"
   KOPIA_SERVER_USERNAME: "$(yaml_escape "${KOPIA_SERVER_USERNAME}")"
   KOPIA_SERVER_PASSWORD: "$(yaml_escape "${KOPIA_SERVER_PASSWORD}")"
 EOF

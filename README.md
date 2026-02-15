@@ -19,7 +19,7 @@ This setup is clone-free on the host and reproducible by lock file:
 - `/etc/homelab/secrets.env`: single runtime secrets file
 - `/var/lib/homelab/generated/k8s/secrets`: generated Kubernetes secret manifests
 
-## 0) Prerequisites
+## Prerequisites
 - Domain in Cloudflare: `aza.network`
 - Cloudflare Zero Trust account (`<team>.cloudflareaccess.com`)
 - Dashboard-managed Cloudflare Tunnel token
@@ -27,10 +27,10 @@ This setup is clone-free on the host and reproducible by lock file:
 - Console/KVM access for first boot (SSH key auth is enforced)
 - Homelab repo pushed to GitHub
 
-## 0.5) Prepare repo defaults before first install
+## Prepare before install
 Update these in Git before installing:
 - `users.users.homelab.openssh.authorizedKeys.keys` in `nixos/homelab-module.nix`
-- Any default hostname/timezone you want in `nixos/homelab-module.nix`
+- Timezone defaults in `nixos/homelab-module.nix` (hostname/username can be set in `secrets.env`)
 
 Commit and push. The host will pin and deploy exactly what is in Git.
 
@@ -89,7 +89,7 @@ Commit and push. The host will pin and deploy exactly what is in Git.
 5. Install runtime secrets file:
    ```bash
    install -d -m 0755 /mnt/etc/homelab
-   cp /path/to/homelab-secrets.env /mnt/etc/homelab/secrets.env
+   cp /path/to/secrets.env /mnt/etc/homelab/secrets.env
    chmod 0600 /mnt/etc/homelab/secrets.env
    ```
 6. Install and reboot:
@@ -124,9 +124,14 @@ Optional Wi-Fi values in the same file:
 - `WIFI_SSID`
 - `WIFI_PASSWORD`
 
+Optional host identity values in the same file:
+- `HOST_USERNAME` (default: `homelab`)
+- `HOST_HOSTNAME` (default: `azalab-0`)
+
 On rebuild (or secrets file change), these happen declaratively:
 - `render-k8s-secrets.service` regenerates k8s secrets
 - `wifi-autoconnect.service` updates NetworkManager profile
+- `host-identity-sync.service` applies hostname and ensures `HOST_USERNAME` exists
 - `cloudflared-dashboard-tunnel` is refreshed
 
 ## 4) Cloudflare Tunnel + DNS
@@ -136,7 +141,7 @@ In Cloudflare Zero Trust dashboard:
 3. Add hostnames:
    - `db.aza.network` -> `http://localhost:80`
    - `photos.aza.network` -> `http://localhost:80`
-   - `kopia.aza.network` -> `http://localhost:80`
+   - your Kopia hostname (`KOPIA_SERVER_HOSTNAME`, default `kopia.aza.network`) -> `http://localhost:80`
    - `vault.aza.network` -> `http://localhost:80`
 4. Put token into `/etc/homelab/secrets.env` as `CLOUDFLARE_TUNNEL_TOKEN`.
 5. Validate:
@@ -168,7 +173,7 @@ In Cloudflare Zero Trust dashboard:
 ## 6) Cloudflare Access policies (edge auth)
 Create two Access applications:
 - `photos.aza.network`
-- `kopia.aza.network`
+- your Kopia hostname (`KOPIA_SERVER_HOSTNAME`, default `kopia.aza.network`)
 
 Policy recommendation:
 - Allow only your IdP group/emails.
@@ -191,6 +196,8 @@ After deploy:
 ## 8) Kopia: local encrypted repo + R2 replication
 Required values in `/etc/homelab/secrets.env`:
 - `KOPIA_REPOSITORY_PASSWORD` (must match k8s secret)
+- `KOPIA_SERVER_HOSTNAME` (used by ingress + macOS client connect, default `kopia.aza.network`)
+- `KOPIA_SERVER_USERNAME`
 - `KOPIA_R2_ACCESS_KEY_ID`
 - `KOPIA_R2_SECRET_ACCESS_KEY`
 - `KOPIA_R2_BUCKET`
@@ -198,7 +205,7 @@ Required values in `/etc/homelab/secrets.env`:
 
 Security note:
 - `/etc/homelab/source/k8s/03-kopia.yaml` uses `--insecure` and `--disable-csrf-token-checks`.
-- Keep `kopia.aza.network` behind Cloudflare Access.
+- Keep `${KOPIA_SERVER_HOSTNAME}` behind Cloudflare Access.
 
 Timers are declarative (`kopia-host-backup.timer`, `kopia-r2-sync.timer`).
 Run once immediately if needed:
@@ -215,16 +222,16 @@ brew install cloudflared kopia
 
 Start authenticated local tunnel:
 ```bash
-cloudflared access tcp --hostname kopia.aza.network --url localhost:15151
+cloudflared access tcp --hostname "${KOPIA_SERVER_HOSTNAME}" --url localhost:15151
 ```
 
 In another terminal:
 ```bash
 kopia repository connect server \
   --url=http://127.0.0.1:15151 \
-  --override-hostname=kopia.aza.network \
-  --server-username=<KOPIA_SERVER_USERNAME> \
-  --server-password=<KOPIA_SERVER_PASSWORD>
+  --override-hostname="${KOPIA_SERVER_HOSTNAME}" \
+  --server-username="${KOPIA_SERVER_USERNAME}" \
+  --server-password="${KOPIA_SERVER_PASSWORD}"
 ```
 
 Create snapshots:

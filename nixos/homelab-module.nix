@@ -5,9 +5,14 @@ let
   homelabSecretsFile = "/etc/homelab/secrets.env";
   homelabGeneratedDir = "/var/lib/homelab/generated";
   homelabK8sSecretsDir = "${homelabGeneratedDir}/k8s/secrets";
+  defaultHostHostname = "azalab-0";
+  defaultHostUsername = "homelab";
+  defaultHostAuthorizedKeys = [
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGNLDRhkSlst/ch4vyH8gm3bh79BRB4MIdLiB/jrT5w6 aiden@plarza.com"
+  ];
 in
 {
-  networking.hostName = "azalab-0";
+  networking.hostName = defaultHostHostname;
   networking.networkmanager.enable = true;
   time.timeZone = "Australia/Sydney";
 
@@ -40,7 +45,7 @@ in
   };
 
   environment.etc."homelab/source".source = homelabSrc;
-  environment.etc."homelab/secrets.env.example".source = "${homelabSrc}/secrets/homelab-secrets.env.example";
+  environment.etc."homelab/secrets.env.example".source = "${homelabSrc}/secrets/secrets.env.example";
 
   environment.systemPackages = with pkgs; [
     git
@@ -214,6 +219,91 @@ in
     };
   };
 
+  systemd.services.host-identity-sync = {
+    description = "Apply host username and hostname from homelab secrets";
+    wantedBy = [ "multi-user.target" ];
+    unitConfig = {
+      StartLimitIntervalSec = 0;
+    };
+    path = [ pkgs.bash pkgs.coreutils pkgs.gawk pkgs.shadow pkgs.util-linux ];
+    serviceConfig = {
+      Type = "oneshot";
+      User = "root";
+      Group = "root";
+    };
+    script = ''
+      set -euo pipefail
+
+      secrets_file="${homelabSecretsFile}"
+      if [[ ! -r "$secrets_file" ]]; then
+        echo "host-identity-sync: $secrets_file not found; skipping."
+        exit 0
+      fi
+
+      set -a
+      # shellcheck disable=SC1090
+      source "$secrets_file"
+      set +a
+
+      host_hostname="${HOST_HOSTNAME:-${defaultHostHostname}}"
+      host_username="${HOST_USERNAME:-${defaultHostUsername}}"
+
+      if [[ ! "$host_hostname" =~ ^[a-zA-Z0-9.-]+$ ]]; then
+        echo "host-identity-sync: invalid HOST_HOSTNAME '$host_hostname'; skipping hostname update."
+      else
+        current_hostname="$(${pkgs.util-linux}/bin/hostnamectl --static 2>/dev/null || ${pkgs.coreutils}/bin/hostname)"
+        if [[ "$current_hostname" != "$host_hostname" ]]; then
+          ${pkgs.util-linux}/bin/hostnamectl set-hostname "$host_hostname"
+        fi
+      fi
+
+      if [[ "$host_username" == "root" || ! "$host_username" =~ ^[a-z_][a-z0-9_-]*$ ]]; then
+        echo "host-identity-sync: invalid HOST_USERNAME '$host_username'; skipping user sync."
+        exit 0
+      fi
+
+      if ! ${pkgs.gawk}/bin/awk -F: -v user="$host_username" '$1 == user { found = 1 } END { exit(found ? 0 : 1) }' /etc/passwd; then
+        ${pkgs.shadow}/bin/useradd \
+          --create-home \
+          --shell "${pkgs.fish}/bin/fish" \
+          --groups wheel,networkmanager \
+          "$host_username"
+      fi
+
+      ${pkgs.shadow}/bin/usermod \
+        --append \
+        --groups wheel,networkmanager \
+        --shell "${pkgs.fish}/bin/fish" \
+        "$host_username"
+
+      passwd_entry="$(${pkgs.gawk}/bin/awk -F: -v user="$host_username" '$1 == user { print; exit }' /etc/passwd)"
+      home_dir="$(printf '%s\n' "$passwd_entry" | ${pkgs.gawk}/bin/awk -F: '{print $6}')"
+      primary_gid="$(printf '%s\n' "$passwd_entry" | ${pkgs.gawk}/bin/awk -F: '{print $4}')"
+      if [[ -n "$home_dir" && -n "$primary_gid" ]]; then
+        ${pkgs.coreutils}/bin/install -d -m 0700 -o "$host_username" -g "$primary_gid" "$home_dir/.ssh"
+        keys_file="$home_dir/.ssh/authorized_keys"
+        if [[ ! -s "$keys_file" ]]; then
+          cat >"$keys_file" <<'KEYS'
+${lib.concatStringsSep "\n" defaultHostAuthorizedKeys}
+KEYS
+          ${pkgs.coreutils}/bin/chown "$host_username:$primary_gid" "$keys_file"
+          ${pkgs.coreutils}/bin/chmod 0600 "$keys_file"
+        fi
+      else
+        echo "host-identity-sync: unable to determine home dir/group for '$host_username'; skipping authorized_keys bootstrap."
+      fi
+    '';
+  };
+
+  systemd.paths.host-identity-sync = {
+    description = "Watch homelab secrets and re-apply host identity";
+    wantedBy = [ "multi-user.target" ];
+    pathConfig = {
+      PathExists = homelabSecretsFile;
+      PathChanged = homelabSecretsFile;
+    };
+  };
+
   systemd.services.cloudflared-dashboard-tunnel = {
     description = "Cloudflare Tunnel (dashboard-managed)";
     after = [ "network-online.target" ];
@@ -328,13 +418,11 @@ in
     };
   };
 
-  users.users.homelab = {
+  users.users.${defaultHostUsername} = {
     isNormalUser = true;
     extraGroups = [ "wheel" "networkmanager" ];
     shell = pkgs.fish;
-    openssh.authorizedKeys.keys = [
-      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGNLDRhkSlst/ch4vyH8gm3bh79BRB4MIdLiB/jrT5w6 aiden@plarza.com"
-    ];
+    openssh.authorizedKeys.keys = defaultHostAuthorizedKeys;
   };
 
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
