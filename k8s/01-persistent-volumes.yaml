@@ -171,3 +171,32 @@ spec:
     requests:
       storage: 20Gi
   volumeName: vaultwarden-data-pv
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: tuwunel-data-pv
+spec:
+  capacity:
+    storage: 100Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  hostPath:
+    path: /srv/tuwunel/data
+    type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: tuwunel-data-pvc
+  namespace: tuwunel
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: ""
+  resources:
+    requests:
+      storage: 100Gi
+  volumeName: tuwunel-data-pv

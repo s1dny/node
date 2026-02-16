@@ -55,6 +55,7 @@ kubectl apply -f "${KOPIA_MANIFEST_PATH}"
 
 kubectl apply -f "${STATIC_DIR}/k8s/04-immich-postgres.yaml"
 kubectl apply -f "${STATIC_DIR}/k8s/05-vaultwarden.yaml"
+kubectl apply -f "${STATIC_DIR}/k8s/06-tuwunel.yaml"
 kubectl -n immich rollout status statefulset/immich-postgres --timeout=5m
 
 helm upgrade --install immich oci://ghcr.io/immich-app/immich-charts/immich \

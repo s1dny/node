@@ -1,0 +1,97 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tuwunel
+  namespace: tuwunel
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tuwunel
+  template:
+    metadata:
+      labels:
+        app: tuwunel
+    spec:
+      containers:
+        - name: tuwunel
+          image: ghcr.io/matrix-construct/tuwunel:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: TUWUNEL_SERVER_NAME
+              value: matrix.aza.network
+            - name: TUWUNEL_DATABASE_PATH
+              value: /var/lib/tuwunel
+            - name: TUWUNEL_PORT
+              value: "8008"
+            - name: TUWUNEL_ADDRESS
+              value: 0.0.0.0
+            - name: TUWUNEL_ALLOW_REGISTRATION
+              value: "false"
+            - name: TUWUNEL_ALLOW_FEDERATION
+              value: "true"
+            - name: TUWUNEL_TRUSTED_SERVERS
+              value: '["matrix.org"]'
+          ports:
+            - name: http
+              containerPort: 8008
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/tuwunel
+          livenessProbe:
+            httpGet:
+              path: /_matrix/client/versions
+              port: 8008
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /_matrix/client/versions
+              port: 8008
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "2"
+              memory: 1Gi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: tuwunel-data-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tuwunel
+  namespace: tuwunel
+spec:
+  selector:
+    app: tuwunel
+  ports:
+    - name: http
+      port: 8008
+      targetPort: 8008
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: tuwunel
+  namespace: tuwunel
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: matrix.aza.network
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: tuwunel
+                port:
+                  number: 8008
