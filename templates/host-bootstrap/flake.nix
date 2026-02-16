@@ -15,6 +15,9 @@
         modules = [
           ./hardware-configuration.nix
           homelab.nixosModules.default
+          ({ ... }: {
+            networking.hostName = "azalab-0";
+          })
         ];
       };
     };

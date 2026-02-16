@@ -16,7 +16,8 @@ Clone-free on the host, reproducible by lock file:
 - `/etc/homelab/source`: read-only symlink to the pinned source
 - `/etc/homelab/source/flux/clusters/azalab-0/manifests/apps/<app>/`: app manifests and per-app k8s secret templates
 - `/etc/homelab/source/flux/clusters/azalab-0/`: Flux cluster reconciliation entrypoint
-- `/etc/homelab/host-secrets/*.env`: runtime secrets for host/system services
+- `/etc/homelab/cloudflare/tunnel-token.env`: Cloudflare dashboard tunnel token
+- `/etc/homelab/host-secrets/kopia-r2.env`: host Kopia-to-R2 sync credentials
 - `/etc/homelab/k8s-secrets/*.env`: per-secret Kubernetes env files used with explicit `kubectl create secret` commands
 
 ## Prerequisites
@@ -61,7 +62,8 @@ Clone-free on the host, reproducible by lock file:
 6. From your local machine (in the root of your clone of this repo), create host/service secrets and per-secret k8s env files:
    ```bash
    mkdir -p nixos/secrets/live
-   for f in nixos/secrets/*.env.example; do cp "$f" "nixos/secrets/live/$(basename "${f%.example}")"; done
+   cp cloudflare/tunnel-token.env.example nixos/secrets/live/tunnel-token.env
+   cp nixos/secrets/kopia-r2.env.example nixos/secrets/live/kopia-r2.env
    vi nixos/secrets/live/*.env
 
    mkdir -p flux/live
@@ -73,10 +75,15 @@ Clone-free on the host, reproducible by lock file:
    ```
 7. On the server, install secrets and rebuild:
    ```bash
+   sudo install -d -m 0750 -o root -g wheel /etc/homelab/cloudflare
+   sudo mv /tmp/tunnel-token.env /etc/homelab/cloudflare/tunnel-token.env
+   sudo chmod 0640 /etc/homelab/cloudflare/tunnel-token.env
+   sudo chgrp wheel /etc/homelab/cloudflare/tunnel-token.env
+
    sudo install -d -m 0750 -o root -g wheel /etc/homelab/host-secrets
-   for f in cloudflared host-identity kopia-r2; do sudo mv "/tmp/${f}.env" "/etc/homelab/host-secrets/${f}.env"; done
-   sudo chmod 0640 /etc/homelab/host-secrets/*.env
-   sudo chgrp wheel /etc/homelab/host-secrets/*.env
+   sudo mv /tmp/kopia-r2.env /etc/homelab/host-secrets/kopia-r2.env
+   sudo chmod 0640 /etc/homelab/host-secrets/kopia-r2.env
+   sudo chgrp wheel /etc/homelab/host-secrets/kopia-r2.env
 
    sudo install -d -m 0750 -o root -g wheel /etc/homelab/k8s-secrets
    for f in libsql-auth kopia-auth immich-db-secret immich-redis-secret vaultwarden-secret tuwunel-secret; do sudo mv "/tmp/${f}.env" "/etc/homelab/k8s-secrets/${f}.env"; done
@@ -102,7 +109,7 @@ In Cloudflare Zero Trust dashboard, create a tunnel named `azalab-0` with these 
 - `vault.aza.network` -> `http://localhost:80`
 - `matrix.aza.network` -> `http://localhost:80`
 
-Put the token in `/etc/homelab/host-secrets/cloudflared.env` as `CLOUDFLARE_TUNNEL_TOKEN` and rebuild.
+Put the token in `/etc/homelab/cloudflare/tunnel-token.env` as `CLOUDFLARE_TUNNEL_TOKEN` and rebuild.
 
 ## 4) Bootstrap Flux, apply secrets, and reconcile workloads
 ```bash
