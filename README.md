@@ -48,12 +48,12 @@ Clone-free on the host, reproducible by lock file:
 4. Install and reboot:
    ```bash
    nixos-install --flake /mnt/etc/nixos#azalab-0
+   sudo passwd aiden
    reboot
    ```
-5. After reboot, find the machine's IP (check your router or run `ip a` on the console), then SSH in. Your public key is hardcoded in `nixos/homelab-module.nix` so no password is needed:
+5. After reboot, find the machine's IP (check your router or run `ip a` on the console). If `sudo` works in your current console session
    ```bash
    ssh aiden@<IP>
-   passwd  # set a password for user aiden so sudo works in later steps
    ```
    Do everything from here on over SSH.
 6. From your local machine (in the root of your clone of this repo), create a secrets file from the template and copy it over:
