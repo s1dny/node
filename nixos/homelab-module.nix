@@ -76,7 +76,21 @@ in
 
     (writeShellScriptBin "homelab-check-k8s-health" ''
       set -euo pipefail
-      exec "${homelabSourcePath}/scripts/check-k8s-health.sh" "$@"
+      if [[ -z "${KUBECONFIG:-}" && -r /etc/rancher/k3s/k3s.yaml ]]; then
+        export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+      fi
+
+      kubectl wait --for=condition=Ready nodes --all --timeout=2m
+
+      if kubectl get namespace flux-system >/dev/null 2>&1; then
+        kubectl -n flux-system wait --for=condition=Ready gitrepository/flux-system --timeout=5m
+        kubectl -n flux-system wait --for=condition=Ready kustomizations.kustomize.toolkit.fluxcd.io --all --timeout=10m
+        kubectl -n flux-system get gitrepositories.source.toolkit.fluxcd.io,kustomizations.kustomize.toolkit.fluxcd.io
+      fi
+
+      kubectl get pods -A
+      kubectl get ingress -A
+      kubectl get pvc -A
     '')
   ];
 
