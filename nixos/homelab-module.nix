@@ -149,7 +149,7 @@ in
     unitConfig = {
       StartLimitIntervalSec = 0;
     };
-    path = [ pkgs.bash pkgs.coreutils pkgs.gawk pkgs.shadow pkgs.util-linux ];
+      path = [ pkgs.bash pkgs.coreutils pkgs.gawk pkgs.shadow pkgs.systemd ];
     serviceConfig = {
       Type = "oneshot";
       User = "root";
@@ -175,9 +175,9 @@ in
       if [[ ! "$host_hostname" =~ ^[a-zA-Z0-9.-]+$ ]]; then
         echo "host-identity-sync: invalid HOST_HOSTNAME '$host_hostname'; skipping hostname update."
       else
-        current_hostname="$(${pkgs.util-linux}/bin/hostnamectl --static 2>/dev/null || ${pkgs.coreutils}/bin/hostname)"
+        current_hostname="$(${pkgs.systemd}/bin/hostnamectl --static 2>/dev/null || ${pkgs.coreutils}/bin/cat /proc/sys/kernel/hostname)"
         if [[ "$current_hostname" != "$host_hostname" ]]; then
-          if ! ${pkgs.util-linux}/bin/hostnamectl set-hostname "$host_hostname"; then
+          if ! ${pkgs.systemd}/bin/hostnamectl set-hostname "$host_hostname"; then
             echo "host-identity-sync: failed to apply HOST_HOSTNAME '$host_hostname'; continuing."
           fi
         fi
