@@ -25,7 +25,7 @@ Clone-free on the host, reproducible by lock file:
 - Console/KVM access for first boot (SSH key auth is enforced)
 
 ## 1) Install NixOS (fresh machine)
-1. Boot NixOS installer. Make sure you have network (ethernet auto-connects, for wifi use `nmtui`).
+1. Boot NixOS installer. Make sure you have network (Ethernet should auto-connect).
 2. Partition using `disko` (this erases the target disk):
    ```bash
    sudo -i
