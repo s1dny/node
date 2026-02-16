@@ -63,9 +63,9 @@ Clone-free on the host, reproducible by lock file:
 5. After reboot, find the machine's IP (check your router or run `ip a` on the console). If `sudo` works in your current console session
    ```bash
    ssh aiden@<IP>
-   CLUSTER=azalab-0
    ```
    Do everything from here on over SSH.
+   Server-side commands below use `$(hostname -s)` so you don't need to manually export `CLUSTER`.
 6. From your local machine (in the root of your clone of this repo), create host/service secrets and per-secret k8s env files:
    ```bash
    CLUSTER=azalab-0
@@ -83,7 +83,6 @@ Clone-free on the host, reproducible by lock file:
    ```
 7. On the server, install secrets and rebuild:
    ```bash
-   CLUSTER=azalab-0
    sudo install -d -m 0750 -o root -g wheel /etc/homelab/cloudflare
    sudo mv /tmp/tunnel-token.env /etc/homelab/cloudflare/tunnel-token.env
    sudo chmod 0640 /etc/homelab/cloudflare/tunnel-token.env
@@ -98,15 +97,14 @@ Clone-free on the host, reproducible by lock file:
    for f in libsql-auth kopia-auth immich-db-secret immich-redis-secret vaultwarden-secret tuwunel-secret; do sudo mv "/tmp/${f}.env" "/etc/homelab/k8s-secrets/${f}.env"; done
    sudo chmod 0640 /etc/homelab/k8s-secrets/*.env
    sudo chgrp wheel /etc/homelab/k8s-secrets/*.env
-   sudo nixos-rebuild switch --flake /etc/nixos#${CLUSTER}
+   sudo nixos-rebuild switch --flake /etc/nixos#$(hostname -s)
    ```
 
 ## 2) Day-2 updates
 ```bash
-CLUSTER=azalab-0
 cd /etc/nixos
 sudo nix flake update homelab
-sudo nixos-rebuild switch --flake /etc/nixos#${CLUSTER}
+sudo nixos-rebuild switch --flake /etc/nixos#$(hostname -s)
 ```
 
 `/etc/nixos/flake.lock` is the exact deployed source-of-truth.
@@ -124,7 +122,7 @@ Put the token in `/etc/homelab/cloudflare/tunnel-token.env` as `CLOUDFLARE_TUNNE
 ## 4) Bootstrap Flux, apply secrets, and reconcile workloads
 Run this once per cluster (safe to rerun).
 ```bash
-CLUSTER=azalab-0
+CLUSTER="${CLUSTER:-$(hostname -s)}"
 kubectl get nodes
 kubectl apply -f https://github.com/fluxcd/flux2/releases/download/v2.6.4/install.yaml
 kubectl -n flux-system rollout status deployment/source-controller --timeout=5m

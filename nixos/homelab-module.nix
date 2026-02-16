@@ -1,4 +1,4 @@
-{ lib, pkgs, ... }:
+{ config, lib, pkgs, ... }:
 
 let
   homelabSrc = ../.;
@@ -82,6 +82,7 @@ in
 
   environment.sessionVariables = {
     KUBECONFIG = "/etc/rancher/k3s/k3s.yaml";
+    CLUSTER = config.networking.hostName;
   };
 
   services.k3s = {
