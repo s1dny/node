@@ -190,7 +190,7 @@ in
 
       supplemental_groups="wheel"
       if ${pkgs.gawk}/bin/awk -F: '$1 == "networkmanager" { found = 1 } END { exit(found ? 0 : 1) }' /etc/group; then
-        supplemental_groups="${supplemental_groups},networkmanager"
+        supplemental_groups="$supplemental_groups,networkmanager"
       fi
 
       if ! ${pkgs.gawk}/bin/awk -F: -v user="$host_username" '$1 == user { found = 1 } END { exit(found ? 0 : 1) }' /etc/passwd; then
