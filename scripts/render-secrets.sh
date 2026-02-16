@@ -30,6 +30,7 @@ required_vars=(
   IMMICH_DB_REPLICATION_PASSWORD
   IMMICH_REDIS_PASSWORD
   VAULTWARDEN_ADMIN_TOKEN
+  TUWUNEL_REGISTRATION_TOKEN
 )
 
 missing_vars=()
@@ -136,6 +137,17 @@ metadata:
 type: Opaque
 stringData:
   ADMIN_TOKEN: "$(yaml_escape "${VAULTWARDEN_ADMIN_TOKEN}")"
+EOF
+
+write_secret_file "${K8S_SECRETS_DIR}/tuwunel-secret.yaml" <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: tuwunel-secret
+  namespace: tuwunel
+type: Opaque
+stringData:
+  TUWUNEL_REGISTRATION_TOKEN: "$(yaml_escape "${TUWUNEL_REGISTRATION_TOKEN}")"
 EOF
 
 echo "rendered:"

@@ -29,7 +29,12 @@ spec:
             - name: TUWUNEL_ADDRESS
               value: 0.0.0.0
             - name: TUWUNEL_ALLOW_REGISTRATION
-              value: "false"
+              value: "true"
+            - name: TUWUNEL_REGISTRATION_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: tuwunel-secret
+                  key: TUWUNEL_REGISTRATION_TOKEN
             - name: TUWUNEL_ALLOW_FEDERATION
               value: "true"
             - name: TUWUNEL_TRUSTED_SERVERS

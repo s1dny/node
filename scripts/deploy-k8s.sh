@@ -29,6 +29,7 @@ required_secret_files=(
   "${K8S_SECRETS_DIR}/immich-db-secret.yaml"
   "${K8S_SECRETS_DIR}/immich-redis-secret.yaml"
   "${K8S_SECRETS_DIR}/vaultwarden-secret.yaml"
+  "${K8S_SECRETS_DIR}/tuwunel-secret.yaml"
 )
 
 for f in "${required_secret_files[@]}"; do
@@ -46,6 +47,7 @@ kubectl apply -f "${K8S_SECRETS_DIR}/kopia-auth.yaml"
 kubectl apply -f "${K8S_SECRETS_DIR}/immich-db-secret.yaml"
 kubectl apply -f "${K8S_SECRETS_DIR}/immich-redis-secret.yaml"
 kubectl apply -f "${K8S_SECRETS_DIR}/vaultwarden-secret.yaml"
+kubectl apply -f "${K8S_SECRETS_DIR}/tuwunel-secret.yaml"
 kubectl apply -f "${STATIC_DIR}/k8s/02-libsql.yaml"
 
 mkdir -p "$(dirname "${KOPIA_MANIFEST_PATH}")"

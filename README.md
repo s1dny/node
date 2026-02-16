@@ -114,14 +114,13 @@ Put `photos.aza.network` and `kopia.aza.network` behind Cloudflare Access. Don't
    kubectl -n tuwunel get pods
    curl -s https://matrix.aza.network/_matrix/client/versions
    ```
-2. Registration is disabled by default. To create the first account, temporarily enable it:
+2. Registration is token-gated by default (`TUWUNEL_ALLOW_REGISTRATION=true` + `TUWUNEL_REGISTRATION_TOKEN`).
+3. Set `TUWUNEL_REGISTRATION_TOKEN` in `/etc/homelab/secrets.env`, then run:
    ```bash
-   kubectl -n tuwunel set env deployment/tuwunel TUWUNEL_ALLOW_REGISTRATION="true"
+   sudo systemctl start render-k8s-secrets.service
+   homelab-deploy-k8s
    ```
-   Register via a Matrix client (e.g. Element), then disable registration again:
-   ```bash
-   kubectl -n tuwunel set env deployment/tuwunel TUWUNEL_ALLOW_REGISTRATION="false"
-   ```
+4. Register users in your Matrix client (e.g. Element) using that token.
 
 ## 8) Kopia backups
 `k8s/03-kopia.yaml` uses `--insecure` and `--disable-csrf-token-checks`. Keep `kopia.aza.network` behind Cloudflare Access.
