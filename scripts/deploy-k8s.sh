@@ -3,66 +3,51 @@ set -euo pipefail
 
 ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 STATIC_DIR="${HOMELAB_STATIC_DIR:-${ROOT_DIR}}"
-GENERATED_DIR="${HOMELAB_GENERATED_DIR:-/var/lib/homelab/generated}"
-K8S_SECRETS_DIR="${HOMELAB_K8S_SECRETS_DIR:-${GENERATED_DIR}/k8s/secrets}"
-SECRETS_ENV="${HOMELAB_SECRETS_ENV:-/etc/homelab/secrets.env}"
-KOPIA_MANIFEST_PATH="${GENERATED_DIR}/k8s/03-kopia.yaml"
+FLUX_CLUSTER_PATH="${HOMELAB_FLUX_CLUSTER_PATH:-${STATIC_DIR}/flux/clusters/azalab-0}"
+FLUX_INSTALL_MANIFEST_URL="${HOMELAB_FLUX_INSTALL_MANIFEST_URL:-https://github.com/fluxcd/flux2/releases/latest/download/install.yaml}"
 
 # Default to k3s kubeconfig on host systems if caller did not set one.
 if [[ -z "${KUBECONFIG:-}" && -r /etc/rancher/k3s/k3s.yaml ]]; then
   export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 fi
 
-if [[ -r "${SECRETS_ENV}" ]]; then
-  set -a
-  # shellcheck disable=SC1090
-  source "${SECRETS_ENV}"
-  set +a
-  "${STATIC_DIR}/scripts/render-secrets.sh" "${SECRETS_ENV}"
+if [[ ! -f "${FLUX_CLUSTER_PATH}/flux-system-sync.yaml" ]]; then
+  echo "error: missing Flux cluster sync file: ${FLUX_CLUSTER_PATH}/flux-system-sync.yaml" >&2
+  exit 1
 fi
 
-KOPIA_SERVER_HOSTNAME="${KOPIA_SERVER_HOSTNAME:-kopia.aza.network}"
+if ! kubectl -n flux-system get deployment/source-controller >/dev/null 2>&1; then
+  kubectl apply -f "${FLUX_INSTALL_MANIFEST_URL}"
+fi
 
-required_secret_files=(
-  "${K8S_SECRETS_DIR}/libsql-auth.yaml"
-  "${K8S_SECRETS_DIR}/kopia-auth.yaml"
-  "${K8S_SECRETS_DIR}/immich-db-secret.yaml"
-  "${K8S_SECRETS_DIR}/immich-redis-secret.yaml"
-  "${K8S_SECRETS_DIR}/vaultwarden-secret.yaml"
-  "${K8S_SECRETS_DIR}/tuwunel-secret.yaml"
-)
+kubectl -n flux-system rollout status deployment/source-controller --timeout=5m
+kubectl -n flux-system rollout status deployment/kustomize-controller --timeout=5m
+kubectl -n flux-system rollout status deployment/helm-controller --timeout=5m
 
-for f in "${required_secret_files[@]}"; do
-  if [[ ! -r "${f}" ]]; then
-    echo "error: missing secret manifest ${f}" >&2
-    echo "hint: create ${SECRETS_ENV} then run ${STATIC_DIR}/scripts/render-secrets.sh" >&2
-    exit 1
-  fi
-done
+"${STATIC_DIR}/scripts/sync-k8s-secrets.sh"
 
-kubectl apply -f "${STATIC_DIR}/k8s/00-namespaces.yaml"
-kubectl apply -f "${STATIC_DIR}/k8s/01-persistent-volumes.yaml"
-kubectl apply -f "${K8S_SECRETS_DIR}/libsql-auth.yaml"
-kubectl apply -f "${K8S_SECRETS_DIR}/kopia-auth.yaml"
-kubectl apply -f "${K8S_SECRETS_DIR}/immich-db-secret.yaml"
-kubectl apply -f "${K8S_SECRETS_DIR}/immich-redis-secret.yaml"
-kubectl apply -f "${K8S_SECRETS_DIR}/vaultwarden-secret.yaml"
-kubectl apply -f "${K8S_SECRETS_DIR}/tuwunel-secret.yaml"
-kubectl apply -f "${STATIC_DIR}/k8s/02-libsql.yaml"
+wait_for_flux_kustomization() {
+  local name="$1"
+  local timeout="$2"
 
-mkdir -p "$(dirname "${KOPIA_MANIFEST_PATH}")"
-sed "s/host: kopia\\.aza\\.network/host: ${KOPIA_SERVER_HOSTNAME}/" \
-  "${STATIC_DIR}/k8s/03-kopia.yaml" > "${KOPIA_MANIFEST_PATH}"
-kubectl apply -f "${KOPIA_MANIFEST_PATH}"
+  for _ in {1..30}; do
+    if kubectl -n flux-system get "kustomization/${name}" >/dev/null 2>&1; then
+      kubectl -n flux-system wait "kustomization/${name}" --for=condition=Ready=True --timeout="${timeout}"
+      return 0
+    fi
+    sleep 2
+  done
 
-kubectl apply -f "${STATIC_DIR}/k8s/04-immich-postgres.yaml"
-kubectl apply -f "${STATIC_DIR}/k8s/05-vaultwarden.yaml"
-kubectl apply -f "${STATIC_DIR}/k8s/06-tuwunel.yaml"
-kubectl -n immich rollout status statefulset/immich-postgres --timeout=5m
+  echo "error: kustomization/${name} was not created in flux-system namespace" >&2
+  return 1
+}
 
-helm upgrade --install immich oci://ghcr.io/immich-app/immich-charts/immich \
-  --namespace immich --create-namespace \
-  -f "${STATIC_DIR}/k8s/04-immich-values.yaml"
+kubectl apply -f "${FLUX_CLUSTER_PATH}/flux-system-sync.yaml"
+wait_for_flux_kustomization "flux-system" "5m"
+wait_for_flux_kustomization "infrastructure" "10m"
+wait_for_flux_kustomization "apps" "15m"
 
 echo
+echo "Flux GitOps reconciliation is active."
+echo "Run to verify:"
 echo "  ${STATIC_DIR}/scripts/check-k8s-health.sh"

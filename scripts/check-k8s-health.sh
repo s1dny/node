@@ -7,7 +7,7 @@ fi
 
 failures=0
 
-check_cmd() {
+run_check() {
   local description="$1"
   shift
 
@@ -21,48 +21,42 @@ check_cmd() {
   echo
 }
 
-check_endpoint() {
+check_rollouts_for_kind() {
   local namespace="$1"
-  local service="$2"
+  local kind="$2"
+  local names
 
-  echo "==> Endpoint check ${namespace}/${service}"
-  local addresses
-  addresses="$(kubectl -n "${namespace}" get endpoints "${service}" -o jsonpath='{.subsets[*].addresses[*].ip}' 2>/dev/null || true)"
-  if [[ -n "${addresses}" ]]; then
-    echo "ok (${addresses})"
-  else
-    echo "failed: no ready endpoints for ${namespace}/${service}" >&2
-    failures=$((failures + 1))
+  names="$(kubectl -n "${namespace}" get "${kind}" -o name 2>/dev/null || true)"
+  if [[ -z "${names}" ]]; then
+    return
   fi
-  echo
+
+  while IFS= read -r name; do
+    [[ -z "${name}" ]] && continue
+    run_check "${namespace} ${name} rollout" kubectl -n "${namespace}" rollout status "${name}" --timeout=10m
+  done <<< "${names}"
 }
 
-check_cmd "All nodes are Ready" kubectl wait --for=condition=Ready nodes --all --timeout=2m
+run_check "All nodes are Ready" kubectl wait --for=condition=Ready nodes --all --timeout=2m
 
-check_cmd "libsql rollout" kubectl -n libsql rollout status deployment/libsql --timeout=5m
-check_cmd "kopia rollout" kubectl -n backup rollout status deployment/kopia-repository-server --timeout=5m
-check_cmd "vaultwarden rollout" kubectl -n vaultwarden rollout status deployment/vaultwarden --timeout=5m
-check_cmd "tuwunel rollout" kubectl -n tuwunel rollout status deployment/tuwunel --timeout=5m
-check_cmd "immich-postgres rollout" kubectl -n immich rollout status statefulset/immich-postgres --timeout=5m
-check_cmd "immich pods ready" kubectl -n immich wait --for=condition=Ready pod -l app.kubernetes.io/instance=immich --timeout=10m
+if kubectl get namespace flux-system >/dev/null 2>&1; then
+  run_check "Flux source is Ready" kubectl -n flux-system wait --for=condition=Ready gitrepository/flux-system --timeout=5m
 
-check_endpoint "libsql" "libsql"
-check_endpoint "backup" "kopia-repository-server"
-check_endpoint "vaultwarden" "vaultwarden"
-check_endpoint "tuwunel" "tuwunel"
-check_endpoint "immich" "immich-postgres"
-check_endpoint "immich" "immich-valkey"
-check_endpoint "immich" "immich-server"
+  for kustomization in flux-system infrastructure apps; do
+    run_check "Flux kustomization ${kustomization} is Ready" \
+      kubectl -n flux-system wait --for=condition=Ready "kustomization/${kustomization}" --timeout=10m
+  done
+fi
 
-echo "==> Snapshot"
+for namespace in libsql backup immich vaultwarden tuwunel; do
+  check_rollouts_for_kind "${namespace}" deployment
+  check_rollouts_for_kind "${namespace}" statefulset
+done
+
 kubectl get pods -A
 kubectl get ingress -A
 kubectl get pvc -A
-echo
 
 if (( failures > 0 )); then
-  echo "health check result: FAILED (${failures} checks)" >&2
   exit 1
 fi
-
-echo "health check result: PASS"

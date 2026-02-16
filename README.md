@@ -14,8 +14,10 @@ Clone-free on the host, reproducible by lock file:
 - `/etc/nixos/flake.nix`: host bootstrap flake
 - `/etc/nixos/flake.lock`: pinned revisions for `nixpkgs` and this repo
 - `/etc/homelab/source`: read-only symlink to the pinned source
-- `/etc/homelab/secrets.env`: single runtime secrets file
-- `/var/lib/homelab/generated/k8s/secrets`: generated Kubernetes secret manifests
+- `/etc/homelab/source/k8s/apps/<app>/`: app manifests and per-app k8s secret templates
+- `/etc/homelab/source/flux/clusters/azalab-0/`: Flux cluster reconciliation entrypoint
+- `/etc/homelab/host-secrets/*.env`: runtime secrets for host/system services
+- `/etc/homelab/k8s-secrets/*.env`: per-secret Kubernetes env files synced into cluster secrets
 
 ## Prerequisites
 - Domain in Cloudflare: `aza.network`
@@ -56,16 +58,30 @@ Clone-free on the host, reproducible by lock file:
    ssh aiden@<IP>
    ```
    Do everything from here on over SSH.
-6. From your local machine (in the root of your clone of this repo), create a secrets file from the template and copy it over:
+6. From your local machine (in the root of your clone of this repo), create host/service secrets and per-secret k8s env files:
    ```bash
-   cp secrets/secrets.env.example secrets/secrets.env
-   vi secrets/secrets.env  # fill in values needed for features you are enabling
-   scp secrets/secrets.env aiden@<IP>:/tmp/secrets.env
+   mkdir -p nixos/secrets/live
+   for f in nixos/secrets/*.env.example; do cp "$f" "nixos/secrets/live/$(basename "${f%.example}")"; done
+   vi nixos/secrets/live/*.env
+
+   mkdir -p k8s/live
+   for f in k8s/apps/*/*.env.example; do cp "$f" "k8s/live/$(basename "${f%.example}")"; done
+   vi k8s/live/*.env
+
+   scp nixos/secrets/live/*.env aiden@<IP>:/tmp/
+   scp k8s/live/*.env aiden@<IP>:/tmp/
    ```
 7. On the server, install secrets and rebuild:
    ```bash
-   sudo mv /tmp/secrets.env /etc/homelab/secrets.env
-   sudo chmod 0600 /etc/homelab/secrets.env
+   sudo install -d -m 0750 -o root -g wheel /etc/homelab/host-secrets
+   for f in cloudflared host-identity kopia-r2; do sudo mv "/tmp/${f}.env" "/etc/homelab/host-secrets/${f}.env"; done
+   sudo chmod 0640 /etc/homelab/host-secrets/*.env
+   sudo chgrp wheel /etc/homelab/host-secrets/*.env
+
+   sudo install -d -m 0750 -o root -g wheel /etc/homelab/k8s-secrets
+   for f in libsql-auth kopia-auth immich-db-secret immich-redis-secret vaultwarden-secret tuwunel-secret; do sudo mv "/tmp/${f}.env" "/etc/homelab/k8s-secrets/${f}.env"; done
+   sudo chmod 0640 /etc/homelab/k8s-secrets/*.env
+   sudo chgrp wheel /etc/homelab/k8s-secrets/*.env
    sudo nixos-rebuild switch --flake /etc/nixos#azalab-0
    ```
 
@@ -86,27 +102,33 @@ In Cloudflare Zero Trust dashboard, create a tunnel named `azalab-0` with these 
 - `vault.aza.network` -> `http://localhost:80`
 - `matrix.aza.network` -> `http://localhost:80`
 
-Put the token in `/etc/homelab/secrets.env` as `CLOUDFLARE_TUNNEL_TOKEN` and rebuild.
+Put the token in `/etc/homelab/host-secrets/cloudflared.env` as `CLOUDFLARE_TUNNEL_TOKEN` and rebuild.
 
-## 4) Deploy Kubernetes workloads
+## 4) Bootstrap Flux and deploy Kubernetes workloads
 ```bash
-sudo systemctl status render-k8s-secrets --no-pager
 kubectl get nodes
 homelab-deploy-k8s
 homelab-check-k8s-health
 ```
+
+`homelab-deploy-k8s` does three things:
+- Installs Flux controllers (if missing) from `https://github.com/fluxcd/flux2/releases/latest/download/install.yaml`
+- Syncs `/etc/homelab/k8s-secrets/*.env` into Kubernetes `Secret` objects
+- Applies `/etc/homelab/source/flux/clusters/azalab-0/flux-system-sync.yaml`, then Flux continuously reconciles the repo
+
+If you fork this repo, update `flux/clusters/azalab-0/flux-system-sync.yaml` so `spec.url` points at your Git remote and branch.
 
 ## 5) Cloudflare Access policies
 Put `photos.aza.network` and `kopia.aza.network` behind Cloudflare Access. Don't put `vault.aza.network` behind it if you need native Bitwarden clients.
 
 ## 6) Vaultwarden setup
 1. Create first account at `https://vault.aza.network`.
-2. Sign into admin at `https://vault.aza.network/admin` using `VAULTWARDEN_ADMIN_TOKEN` from `/etc/homelab/secrets.env`.
+2. Sign into admin at `https://vault.aza.network/admin` using `ADMIN_TOKEN` from `/etc/homelab/k8s-secrets/vaultwarden-secret.env`.
 3. Disable public registrations:
    ```bash
    kubectl -n vaultwarden set env deployment/vaultwarden SIGNUPS_ALLOWED="false"
    ```
-   Then commit the same change to `k8s/05-vaultwarden.yaml` in Git so it persists across rebuilds.
+   Then commit the same change to `k8s/apps/vaultwarden/manifest.yaml` in Git so it persists across rebuilds.
 
 ## 7) Tuwunel (Matrix homeserver)
 1. After deploy, verify it's running:
@@ -115,15 +137,15 @@ Put `photos.aza.network` and `kopia.aza.network` behind Cloudflare Access. Don't
    curl -s https://matrix.aza.network/_matrix/client/versions
    ```
 2. Registration is token-gated by default (`TUWUNEL_ALLOW_REGISTRATION=true` + `TUWUNEL_REGISTRATION_TOKEN`).
-3. Set `TUWUNEL_REGISTRATION_TOKEN` in `/etc/homelab/secrets.env`, then run:
+3. Set `TUWUNEL_REGISTRATION_TOKEN` in `/etc/homelab/k8s-secrets/tuwunel-secret.env`, then run:
    ```bash
-   sudo systemctl start render-k8s-secrets.service
-   homelab-deploy-k8s
+   homelab-sync-k8s-secrets
+   kubectl -n tuwunel rollout restart deployment/tuwunel
    ```
 4. Register users in your Matrix client (e.g. Element) using that token.
 
 ## 8) Kopia backups
-`k8s/03-kopia.yaml` uses `--insecure` and `--disable-csrf-token-checks`. Keep `kopia.aza.network` behind Cloudflare Access.
+`k8s/apps/kopia/manifest.yaml` uses `--insecure` and `--disable-csrf-token-checks`. Keep `kopia.aza.network` behind Cloudflare Access.
 
 `KOPIA_R2_ENDPOINT` format: `https://<accountid>.r2.cloudflarestorage.com`
 
@@ -159,6 +181,8 @@ Manual checks:
 ```bash
 sudo systemctl status cloudflared-dashboard-tunnel --no-pager
 kubectl get pods -A
+kubectl -n flux-system get gitrepositories,kustomizations
+kubectl -n immich get helmreleases
 kubectl -n libsql get ingress,svc,pods
 kubectl -n immich get ingress,svc,pods
 kubectl -n backup get ingress,svc,pods

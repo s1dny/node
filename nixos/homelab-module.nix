@@ -3,9 +3,10 @@
 let
   homelabSrc = ../.;
   homelabSourcePath = "/etc/homelab/source";
-  homelabSecretsFile = "/etc/homelab/secrets.env";
-  homelabGeneratedDir = "/var/lib/homelab/generated";
-  homelabK8sSecretsDir = "${homelabGeneratedDir}/k8s/secrets";
+  homelabHostSecretsDir = "/etc/homelab/host-secrets";
+  homelabCloudflaredSecretsFile = "${homelabHostSecretsDir}/cloudflared.env";
+  homelabHostIdentitySecretsFile = "${homelabHostSecretsDir}/host-identity.env";
+  homelabKopiaR2SecretsFile = "${homelabHostSecretsDir}/kopia-r2.env";
   defaultHostHostname = "azalab-0";
   defaultHostUsername = "aiden";
   defaultHostAuthorizedKeys = [
@@ -46,7 +47,15 @@ in
   };
 
   environment.etc."homelab/source".source = homelabSrc;
-  environment.etc."homelab/secrets.env.example".source = "${homelabSrc}/secrets/secrets.env.example";
+  environment.etc."homelab/host-secrets/cloudflared.env.example".source = "${homelabSrc}/nixos/secrets/cloudflared.env.example";
+  environment.etc."homelab/host-secrets/host-identity.env.example".source = "${homelabSrc}/nixos/secrets/host-identity.env.example";
+  environment.etc."homelab/host-secrets/kopia-r2.env.example".source = "${homelabSrc}/nixos/secrets/kopia-r2.env.example";
+  environment.etc."homelab/k8s-secrets/libsql-auth.env.example".source = "${homelabSrc}/k8s/apps/libsql/libsql-auth.env.example";
+  environment.etc."homelab/k8s-secrets/kopia-auth.env.example".source = "${homelabSrc}/k8s/apps/kopia/kopia-auth.env.example";
+  environment.etc."homelab/k8s-secrets/immich-db-secret.env.example".source = "${homelabSrc}/k8s/apps/immich/immich-db-secret.env.example";
+  environment.etc."homelab/k8s-secrets/immich-redis-secret.env.example".source = "${homelabSrc}/k8s/apps/immich/immich-redis-secret.env.example";
+  environment.etc."homelab/k8s-secrets/vaultwarden-secret.env.example".source = "${homelabSrc}/k8s/apps/vaultwarden/vaultwarden-secret.env.example";
+  environment.etc."homelab/k8s-secrets/tuwunel-secret.env.example".source = "${homelabSrc}/k8s/apps/tuwunel/tuwunel-secret.env.example";
 
   environment.systemPackages = with pkgs; [
     git
@@ -67,22 +76,16 @@ in
     codex
     opencode
 
-    (writeShellScriptBin "homelab-render-secrets" ''
-      set -euo pipefail
-      export HOMELAB_STATIC_DIR="${homelabSourcePath}"
-      export HOMELAB_SECRETS_ENV="${homelabSecretsFile}"
-      export HOMELAB_GENERATED_DIR="${homelabGeneratedDir}"
-      export HOMELAB_K8S_SECRETS_DIR="${homelabK8sSecretsDir}"
-      exec "${homelabSourcePath}/scripts/render-secrets.sh" "$@"
-    '')
-
     (writeShellScriptBin "homelab-deploy-k8s" ''
       set -euo pipefail
       export HOMELAB_STATIC_DIR="${homelabSourcePath}"
-      export HOMELAB_SECRETS_ENV="${homelabSecretsFile}"
-      export HOMELAB_GENERATED_DIR="${homelabGeneratedDir}"
-      export HOMELAB_K8S_SECRETS_DIR="${homelabK8sSecretsDir}"
       exec "${homelabSourcePath}/scripts/deploy-k8s.sh" "$@"
+    '')
+
+    (writeShellScriptBin "homelab-sync-k8s-secrets" ''
+      set -euo pipefail
+      export HOMELAB_STATIC_DIR="${homelabSourcePath}"
+      exec "${homelabSourcePath}/scripts/sync-k8s-secrets.sh" "$@"
     '')
 
     (writeShellScriptBin "homelab-check-k8s-health" ''
@@ -105,38 +108,8 @@ in
     ];
   };
 
-  systemd.services.render-k8s-secrets = {
-    description = "Render Kubernetes secrets from homelab secrets file";
-    wantedBy = [ "multi-user.target" ];
-    unitConfig = {
-      StartLimitIntervalSec = 0;
-    };
-    path = [ pkgs.bash ];
-    environment = {
-      HOMELAB_STATIC_DIR = homelabSourcePath;
-      HOMELAB_SECRETS_ENV = homelabSecretsFile;
-      HOMELAB_GENERATED_DIR = homelabGeneratedDir;
-      HOMELAB_K8S_SECRETS_DIR = homelabK8sSecretsDir;
-    };
-    serviceConfig = {
-      Type = "oneshot";
-      User = "root";
-      Group = "root";
-    };
-    script = ''
-      set -euo pipefail
-
-      if [[ ! -r "${homelabSecretsFile}" ]]; then
-        echo "render-k8s-secrets: ${homelabSecretsFile} not found; skipping."
-        exit 0
-      fi
-
-      exec "${homelabSourcePath}/scripts/render-secrets.sh" "${homelabSecretsFile}"
-    '';
-  };
-
   systemd.services.host-identity-sync = {
-    description = "Apply host username and hostname from homelab secrets";
+    description = "Apply host username and hostname from host identity secrets";
     wantedBy = [ "multi-user.target" ];
     unitConfig = {
       StartLimitIntervalSec = 0;
@@ -150,7 +123,7 @@ in
     script = ''
       set -euo pipefail
 
-      secrets_file="${homelabSecretsFile}"
+      secrets_file="${homelabHostIdentitySecretsFile}"
       if [[ ! -r "$secrets_file" ]]; then
         echo "host-identity-sync: $secrets_file not found; skipping."
         exit 0
@@ -244,7 +217,7 @@ KEYS
       Type = "simple";
       User = "root";
       Group = "root";
-      EnvironmentFile = homelabSecretsFile;
+      EnvironmentFile = homelabCloudflaredSecretsFile;
       Restart = "always";
       RestartSec = "5s";
     };
@@ -263,10 +236,11 @@ KEYS
 
   systemd.tmpfiles.rules = [
     "d /etc/homelab 0755 root root -"
+    "d /etc/homelab/host-secrets 0750 root wheel -"
+    "d /etc/homelab/k8s-secrets 0750 root wheel -"
     "d /var/lib/homelab 0755 root root -"
     "d /var/lib/homelab/generated 0750 root wheel -"
     "d /var/lib/homelab/generated/k8s 0750 root wheel -"
-    "d /var/lib/homelab/generated/k8s/secrets 0750 root wheel -"
     "d /srv/libsql/data 0750 root root -"
     "d /srv/immich/library 0750 root root -"
     "d /srv/immich/postgres 0750 root root -"
@@ -285,7 +259,7 @@ KEYS
     serviceConfig = {
       Type = "oneshot";
       User = "root";
-      EnvironmentFile = homelabSecretsFile;
+      EnvironmentFile = homelabKopiaR2SecretsFile;
       ExecStart = "${pkgs.bash}/bin/bash ${homelabSourcePath}/scripts/kopia-host-backup.sh";
     };
   };
@@ -308,7 +282,7 @@ KEYS
     serviceConfig = {
       Type = "oneshot";
       User = "root";
-      EnvironmentFile = homelabSecretsFile;
+      EnvironmentFile = homelabKopiaR2SecretsFile;
       ExecStart = "${pkgs.bash}/bin/bash ${homelabSourcePath}/scripts/kopia-r2-sync.sh";
     };
   };

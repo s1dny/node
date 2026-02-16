@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - apps/libsql/manifest.yaml
+  - apps/kopia/manifest.yaml
+  - apps/immich/postgres.yaml
+  - apps/immich/repository.yaml
+  - apps/immich/release.yaml
+  - apps/vaultwarden/manifest.yaml
+  - apps/tuwunel/manifest.yaml
+
+configMapGenerator:
+  - name: immich-values
+    namespace: immich
+    files:
+      - values.yaml=apps/immich/values.yaml
+
+generatorOptions:
+  disableNameSuffixHash: true
