@@ -65,6 +65,7 @@ in
     eza
     claude-code
     codex
+    opencode
 
     (writeShellScriptBin "homelab-render-secrets" ''
       set -euo pipefail
