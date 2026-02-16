@@ -27,6 +27,24 @@ spec:
       labels:
         app: immich-postgres
     spec:
+      initContainers:
+        - name: fix-data-permissions
+          image: ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - |
+              uid="$(id -u postgres)"
+              gid="$(id -g postgres)"
+              chown "${uid}:${gid}" /var/lib/postgresql/data
+              chmod 700 /var/lib/postgresql/data
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
       containers:
         - name: postgres
           image: ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0
