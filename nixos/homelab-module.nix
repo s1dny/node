@@ -1,6 +1,7 @@
-{ lib, pkgs, homelabSrc ? ../., ... }:
+{ lib, pkgs, ... }:
 
 let
+  homelabSrc = ../.;
   homelabSourcePath = "/etc/homelab/source";
   homelabSecretsFile = "/etc/homelab/secrets.env";
   homelabGeneratedDir = "/var/lib/homelab/generated";
