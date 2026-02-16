@@ -62,6 +62,8 @@ in
     cloudflared
     neovim
     eza
+    claude-code
+    codex
 
     (writeShellScriptBin "homelab-render-secrets" ''
       set -euo pipefail

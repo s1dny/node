@@ -42,12 +42,14 @@ check_cmd "All nodes are Ready" kubectl wait --for=condition=Ready nodes --all -
 check_cmd "libsql rollout" kubectl -n libsql rollout status deployment/libsql --timeout=5m
 check_cmd "kopia rollout" kubectl -n backup rollout status deployment/kopia-repository-server --timeout=5m
 check_cmd "vaultwarden rollout" kubectl -n vaultwarden rollout status deployment/vaultwarden --timeout=5m
+check_cmd "tuwunel rollout" kubectl -n tuwunel rollout status deployment/tuwunel --timeout=5m
 check_cmd "immich-postgres rollout" kubectl -n immich rollout status statefulset/immich-postgres --timeout=5m
 check_cmd "immich pods ready" kubectl -n immich wait --for=condition=Ready pod -l app.kubernetes.io/instance=immich --timeout=10m
 
 check_endpoint "libsql" "libsql"
 check_endpoint "backup" "kopia-repository-server"
 check_endpoint "vaultwarden" "vaultwarden"
+check_endpoint "tuwunel" "tuwunel"
 check_endpoint "immich" "immich-postgres"
 check_endpoint "immich" "immich-valkey"
 check_endpoint "immich" "immich-server"

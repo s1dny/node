@@ -84,6 +84,7 @@ In Cloudflare Zero Trust dashboard, create a tunnel named `azalab-0` with these 
 - `photos.aza.network` -> `http://localhost:80`
 - `kopia.aza.network` -> `http://localhost:80`
 - `vault.aza.network` -> `http://localhost:80`
+- `matrix.aza.network` -> `http://localhost:80`
 
 Put the token in `/etc/homelab/secrets.env` as `CLOUDFLARE_TUNNEL_TOKEN` and rebuild.
 
@@ -107,7 +108,22 @@ Put `photos.aza.network` and `kopia.aza.network` behind Cloudflare Access. Don't
    ```
    Then commit the same change to `k8s/05-vaultwarden.yaml` in Git so it persists across rebuilds.
 
-## 7) Kopia backups
+## 7) Tuwunel (Matrix homeserver)
+1. After deploy, verify it's running:
+   ```bash
+   kubectl -n tuwunel get pods
+   curl -s https://matrix.aza.network/_matrix/client/versions
+   ```
+2. Registration is disabled by default. To create the first account, temporarily enable it:
+   ```bash
+   kubectl -n tuwunel set env deployment/tuwunel TUWUNEL_ALLOW_REGISTRATION="true"
+   ```
+   Register via a Matrix client (e.g. Element), then disable registration again:
+   ```bash
+   kubectl -n tuwunel set env deployment/tuwunel TUWUNEL_ALLOW_REGISTRATION="false"
+   ```
+
+## 8) Kopia backups
 `k8s/03-kopia.yaml` uses `--insecure` and `--disable-csrf-token-checks`. Keep `kopia.aza.network` behind Cloudflare Access.
 
 `KOPIA_R2_ENDPOINT` format: `https://<accountid>.r2.cloudflarestorage.com`
@@ -118,7 +134,7 @@ sudo systemctl start kopia-host-backup.service
 sudo systemctl start kopia-r2-sync.service
 ```
 
-## 8) MacBook backup
+## 9) MacBook backup
 ```bash
 brew install cloudflared kopia
 cloudflared access tcp --hostname kopia.aza.network --url localhost:15151
@@ -135,7 +151,7 @@ kopia repository connect server \
 kopia snapshot create ~/Documents ~/Pictures ~/Desktop
 ```
 
-## 9) Verification
+## 10) Verification
 ```bash
 homelab-check-k8s-health
 ```
@@ -148,6 +164,7 @@ kubectl -n libsql get ingress,svc,pods
 kubectl -n immich get ingress,svc,pods
 kubectl -n backup get ingress,svc,pods
 kubectl -n vaultwarden get ingress,svc,pods
+kubectl -n tuwunel get ingress,svc,pods
 sudo journalctl -u kopia-host-backup.service -n 100 --no-pager
 sudo journalctl -u kopia-r2-sync.service -n 100 --no-pager
 ```
