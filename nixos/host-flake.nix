@@ -12,6 +12,7 @@
     in {
       nixosConfigurations.azalab-0 = nixpkgs.lib.nixosSystem {
         inherit system;
+        specialArgs = { homelabSrc = homelab; };
         modules = [
           ./hardware-configuration.nix
           homelab.nixosModules.default
