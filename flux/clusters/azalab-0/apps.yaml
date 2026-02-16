@@ -7,7 +7,7 @@ spec:
   dependsOn:
     - name: infrastructure
   interval: 10m0s
-  path: ./k8s
+  path: ./flux/clusters/azalab-0/manifests
   prune: true
   sourceRef:
     kind: GitRepository

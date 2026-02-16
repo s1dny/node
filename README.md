@@ -14,7 +14,7 @@ Clone-free on the host, reproducible by lock file:
 - `/etc/nixos/flake.nix`: host bootstrap flake
 - `/etc/nixos/flake.lock`: pinned revisions for `nixpkgs` and this repo
 - `/etc/homelab/source`: read-only symlink to the pinned source
-- `/etc/homelab/source/k8s/apps/<app>/`: app manifests and per-app k8s secret templates
+- `/etc/homelab/source/flux/clusters/azalab-0/manifests/apps/<app>/`: app manifests and per-app k8s secret templates
 - `/etc/homelab/source/flux/clusters/azalab-0/`: Flux cluster reconciliation entrypoint
 - `/etc/homelab/host-secrets/*.env`: runtime secrets for host/system services
 - `/etc/homelab/k8s-secrets/*.env`: per-secret Kubernetes env files used with explicit `kubectl create secret` commands
@@ -64,12 +64,12 @@ Clone-free on the host, reproducible by lock file:
    for f in nixos/secrets/*.env.example; do cp "$f" "nixos/secrets/live/$(basename "${f%.example}")"; done
    vi nixos/secrets/live/*.env
 
-   mkdir -p k8s/live
-   for f in k8s/apps/*/*.env.example; do cp "$f" "k8s/live/$(basename "${f%.example}")"; done
-   vi k8s/live/*.env
+   mkdir -p flux/live
+   for f in flux/clusters/azalab-0/manifests/apps/*/*.env.example; do cp "$f" "flux/live/$(basename "${f%.example}")"; done
+   vi flux/live/*.env
 
    scp nixos/secrets/live/*.env aiden@<IP>:/tmp/
-   scp k8s/live/*.env aiden@<IP>:/tmp/
+   scp flux/live/*.env aiden@<IP>:/tmp/
    ```
 7. On the server, install secrets and rebuild:
    ```bash
@@ -112,7 +112,7 @@ kubectl -n flux-system rollout status deployment/source-controller --timeout=5m
 kubectl -n flux-system rollout status deployment/kustomize-controller --timeout=5m
 kubectl -n flux-system rollout status deployment/helm-controller --timeout=5m
 
-kubectl apply -f /etc/homelab/source/k8s/cluster/namespaces.yaml
+kubectl apply -f /etc/homelab/source/flux/clusters/azalab-0/manifests/cluster/namespaces.yaml
 kubectl -n libsql create secret generic libsql-auth --from-env-file=/etc/homelab/k8s-secrets/libsql-auth.env --dry-run=client -o yaml | kubectl apply -f -
 kubectl -n backup create secret generic kopia-auth --from-env-file=/etc/homelab/k8s-secrets/kopia-auth.env --dry-run=client -o yaml | kubectl apply -f -
 kubectl -n immich create secret generic immich-db-secret --from-env-file=/etc/homelab/k8s-secrets/immich-db-secret.env --dry-run=client -o yaml | kubectl apply -f -
@@ -139,7 +139,7 @@ Put `photos.aza.network` and `kopia.aza.network` behind Cloudflare Access. Don't
    ```bash
    kubectl -n vaultwarden set env deployment/vaultwarden SIGNUPS_ALLOWED="false"
    ```
-   Then commit the same change to `k8s/apps/vaultwarden/manifest.yaml` in Git so it persists across rebuilds.
+   Then commit the same change to `flux/clusters/azalab-0/manifests/apps/vaultwarden/manifest.yaml` in Git so it persists across rebuilds.
 
 ## 7) Tuwunel (Matrix homeserver)
 1. After deploy, verify it's running:
@@ -156,7 +156,7 @@ Put `photos.aza.network` and `kopia.aza.network` behind Cloudflare Access. Don't
 4. Register users in your Matrix client (e.g. Element) using that token.
 
 ## 8) Kopia backups
-`k8s/apps/kopia/manifest.yaml` uses `--insecure` and `--disable-csrf-token-checks`. Keep `kopia.aza.network` behind Cloudflare Access.
+`flux/clusters/azalab-0/manifests/apps/kopia/manifest.yaml` uses `--insecure` and `--disable-csrf-token-checks`. Keep `kopia.aza.network` behind Cloudflare Access.
 
 `KOPIA_R2_ENDPOINT` format: `https://<accountid>.r2.cloudflarestorage.com`
 

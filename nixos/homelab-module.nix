@@ -50,12 +50,12 @@ in
   environment.etc."homelab/host-secrets/cloudflared.env.example".source = "${homelabSrc}/nixos/secrets/cloudflared.env.example";
   environment.etc."homelab/host-secrets/host-identity.env.example".source = "${homelabSrc}/nixos/secrets/host-identity.env.example";
   environment.etc."homelab/host-secrets/kopia-r2.env.example".source = "${homelabSrc}/nixos/secrets/kopia-r2.env.example";
-  environment.etc."homelab/k8s-secrets/libsql-auth.env.example".source = "${homelabSrc}/k8s/apps/libsql/libsql-auth.env.example";
-  environment.etc."homelab/k8s-secrets/kopia-auth.env.example".source = "${homelabSrc}/k8s/apps/kopia/kopia-auth.env.example";
-  environment.etc."homelab/k8s-secrets/immich-db-secret.env.example".source = "${homelabSrc}/k8s/apps/immich/immich-db-secret.env.example";
-  environment.etc."homelab/k8s-secrets/immich-redis-secret.env.example".source = "${homelabSrc}/k8s/apps/immich/immich-redis-secret.env.example";
-  environment.etc."homelab/k8s-secrets/vaultwarden-secret.env.example".source = "${homelabSrc}/k8s/apps/vaultwarden/vaultwarden-secret.env.example";
-  environment.etc."homelab/k8s-secrets/tuwunel-secret.env.example".source = "${homelabSrc}/k8s/apps/tuwunel/tuwunel-secret.env.example";
+  environment.etc."homelab/k8s-secrets/libsql-auth.env.example".source = "${homelabSrc}/flux/clusters/azalab-0/manifests/apps/libsql/libsql-auth.env.example";
+  environment.etc."homelab/k8s-secrets/kopia-auth.env.example".source = "${homelabSrc}/flux/clusters/azalab-0/manifests/apps/kopia/kopia-auth.env.example";
+  environment.etc."homelab/k8s-secrets/immich-db-secret.env.example".source = "${homelabSrc}/flux/clusters/azalab-0/manifests/apps/immich/immich-db-secret.env.example";
+  environment.etc."homelab/k8s-secrets/immich-redis-secret.env.example".source = "${homelabSrc}/flux/clusters/azalab-0/manifests/apps/immich/immich-redis-secret.env.example";
+  environment.etc."homelab/k8s-secrets/vaultwarden-secret.env.example".source = "${homelabSrc}/flux/clusters/azalab-0/manifests/apps/vaultwarden/vaultwarden-secret.env.example";
+  environment.etc."homelab/k8s-secrets/tuwunel-secret.env.example".source = "${homelabSrc}/flux/clusters/azalab-0/manifests/apps/tuwunel/tuwunel-secret.env.example";
 
   environment.systemPackages = with pkgs; [
     git
