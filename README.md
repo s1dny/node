@@ -17,7 +17,7 @@ Clone-free on the host, reproducible by lock file:
 - `/etc/homelab/source/k8s/apps/<app>/`: app manifests and per-app k8s secret templates
 - `/etc/homelab/source/flux/clusters/azalab-0/`: Flux cluster reconciliation entrypoint
 - `/etc/homelab/host-secrets/*.env`: runtime secrets for host/system services
-- `/etc/homelab/k8s-secrets/*.env`: per-secret Kubernetes env files synced into cluster secrets
+- `/etc/homelab/k8s-secrets/*.env`: per-secret Kubernetes env files used with explicit `kubectl create secret` commands
 
 ## Prerequisites
 - Domain in Cloudflare: `aza.network`
@@ -104,19 +104,30 @@ In Cloudflare Zero Trust dashboard, create a tunnel named `azalab-0` with these 
 
 Put the token in `/etc/homelab/host-secrets/cloudflared.env` as `CLOUDFLARE_TUNNEL_TOKEN` and rebuild.
 
-## 4) Bootstrap Flux and deploy Kubernetes workloads
+## 4) Bootstrap Flux, apply secrets, and reconcile workloads
 ```bash
 kubectl get nodes
-homelab-deploy-k8s
+kubectl apply -f https://github.com/fluxcd/flux2/releases/download/v2.6.4/install.yaml
+kubectl -n flux-system rollout status deployment/source-controller --timeout=5m
+kubectl -n flux-system rollout status deployment/kustomize-controller --timeout=5m
+kubectl -n flux-system rollout status deployment/helm-controller --timeout=5m
+
+kubectl apply -f /etc/homelab/source/k8s/cluster/namespaces.yaml
+kubectl -n libsql create secret generic libsql-auth --from-env-file=/etc/homelab/k8s-secrets/libsql-auth.env --dry-run=client -o yaml | kubectl apply -f -
+kubectl -n backup create secret generic kopia-auth --from-env-file=/etc/homelab/k8s-secrets/kopia-auth.env --dry-run=client -o yaml | kubectl apply -f -
+kubectl -n immich create secret generic immich-db-secret --from-env-file=/etc/homelab/k8s-secrets/immich-db-secret.env --dry-run=client -o yaml | kubectl apply -f -
+if [ -r /etc/homelab/k8s-secrets/immich-redis-secret.env ]; then kubectl -n immich create secret generic immich-redis-secret --from-env-file=/etc/homelab/k8s-secrets/immich-redis-secret.env --dry-run=client -o yaml | kubectl apply -f -; fi
+kubectl -n vaultwarden create secret generic vaultwarden-secret --from-env-file=/etc/homelab/k8s-secrets/vaultwarden-secret.env --dry-run=client -o yaml | kubectl apply -f -
+kubectl -n tuwunel create secret generic tuwunel-secret --from-env-file=/etc/homelab/k8s-secrets/tuwunel-secret.env --dry-run=client -o yaml | kubectl apply -f -
+
+kubectl apply -f /etc/homelab/source/flux/clusters/azalab-0/flux-system-sync.yaml
+kubectl -n flux-system wait --for=condition=Ready=True kustomization/flux-system --timeout=5m
+kubectl -n flux-system wait --for=condition=Ready=True kustomization/infrastructure --timeout=10m
+kubectl -n flux-system wait --for=condition=Ready=True kustomization/apps --timeout=10m
 homelab-check-k8s-health
 ```
 
-`homelab-deploy-k8s` does three things:
-- Installs Flux controllers (if missing) from `https://github.com/fluxcd/flux2/releases/latest/download/install.yaml`
-- Syncs `/etc/homelab/k8s-secrets/*.env` into Kubernetes `Secret` objects
-- Applies `/etc/homelab/source/flux/clusters/azalab-0/flux-system-sync.yaml`, then Flux continuously reconciles the repo
-
-If you fork this repo, update `flux/clusters/azalab-0/flux-system-sync.yaml` so `spec.url` points at your Git remote and branch.
+If you fork this repo, update `flux/clusters/azalab-0/flux-system-sync.yaml` so `spec.url` and `spec.ref.branch` point at your Git remote and branch.
 
 ## 5) Cloudflare Access policies
 Put `photos.aza.network` and `kopia.aza.network` behind Cloudflare Access. Don't put `vault.aza.network` behind it if you need native Bitwarden clients.
@@ -139,7 +150,7 @@ Put `photos.aza.network` and `kopia.aza.network` behind Cloudflare Access. Don't
 2. Registration is token-gated by default (`TUWUNEL_ALLOW_REGISTRATION=true` + `TUWUNEL_REGISTRATION_TOKEN`).
 3. Set `TUWUNEL_REGISTRATION_TOKEN` in `/etc/homelab/k8s-secrets/tuwunel-secret.env`, then run:
    ```bash
-   homelab-sync-k8s-secrets
+   kubectl -n tuwunel create secret generic tuwunel-secret --from-env-file=/etc/homelab/k8s-secrets/tuwunel-secret.env --dry-run=client -o yaml | kubectl apply -f -
    kubectl -n tuwunel rollout restart deployment/tuwunel
    ```
 4. Register users in your Matrix client (e.g. Element) using that token.

@@ -76,18 +76,6 @@ in
     codex
     opencode
 
-    (writeShellScriptBin "homelab-deploy-k8s" ''
-      set -euo pipefail
-      export HOMELAB_STATIC_DIR="${homelabSourcePath}"
-      exec "${homelabSourcePath}/scripts/deploy-k8s.sh" "$@"
-    '')
-
-    (writeShellScriptBin "homelab-sync-k8s-secrets" ''
-      set -euo pipefail
-      export HOMELAB_STATIC_DIR="${homelabSourcePath}"
-      exec "${homelabSourcePath}/scripts/sync-k8s-secrets.sh" "$@"
-    '')
-
     (writeShellScriptBin "homelab-check-k8s-health" ''
       set -euo pipefail
       exec "${homelabSourcePath}/scripts/check-k8s-health.sh" "$@"
