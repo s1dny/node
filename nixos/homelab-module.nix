@@ -106,7 +106,7 @@ in
 
   systemd.services.render-k8s-secrets = {
     description = "Render Kubernetes secrets from homelab secrets file";
-    wantedBy = lib.mkForce [ ];
+    wantedBy = [ "multi-user.target" ];
     unitConfig = {
       StartLimitIntervalSec = 0;
     };
@@ -134,22 +134,13 @@ in
     '';
   };
 
-  systemd.paths.render-k8s-secrets = {
-    description = "Watch homelab secrets and render Kubernetes manifests";
-    wantedBy = [ "multi-user.target" ];
-    pathConfig = {
-      PathExists = homelabSecretsFile;
-      PathChanged = homelabSecretsFile;
-    };
-  };
-
   systemd.services.host-identity-sync = {
     description = "Apply host username and hostname from homelab secrets";
     wantedBy = [ "multi-user.target" ];
     unitConfig = {
       StartLimitIntervalSec = 0;
     };
-      path = [ pkgs.bash pkgs.coreutils pkgs.gawk pkgs.shadow pkgs.systemd ];
+    path = [ pkgs.bash pkgs.coreutils pkgs.gawk pkgs.shadow pkgs.systemd ];
     serviceConfig = {
       Type = "oneshot";
       User = "root";
@@ -239,15 +230,6 @@ KEYS
     '';
   };
 
-  systemd.paths.host-identity-sync = {
-    description = "Watch homelab secrets and re-apply host identity";
-    wantedBy = [ "multi-user.target" ];
-    pathConfig = {
-      PathExists = homelabSecretsFile;
-      PathChanged = homelabSecretsFile;
-    };
-  };
-
   systemd.services.cloudflared-dashboard-tunnel = {
     description = "Cloudflare Tunnel (dashboard-managed)";
     after = [ "network-online.target" ];
@@ -276,29 +258,6 @@ KEYS
 
       exec ${pkgs.cloudflared}/bin/cloudflared tunnel --no-autoupdate run --token "$CLOUDFLARE_TUNNEL_TOKEN"
     '';
-  };
-
-  systemd.services.cloudflared-dashboard-tunnel-refresh = {
-    description = "Restart cloudflared when homelab secrets change";
-    path = [ pkgs.systemd ];
-    unitConfig = {
-      StartLimitIntervalSec = 0;
-    };
-    serviceConfig = {
-      Type = "oneshot";
-    };
-    script = ''
-      systemctl try-restart cloudflared-dashboard-tunnel.service
-    '';
-  };
-
-  systemd.paths.cloudflared-dashboard-tunnel-refresh = {
-    description = "Watch homelab secrets and refresh cloudflared";
-    wantedBy = [ "multi-user.target" ];
-    pathConfig = {
-      PathExists = homelabSecretsFile;
-      PathChanged = homelabSecretsFile;
-    };
   };
 
   systemd.tmpfiles.rules = [
