@@ -68,32 +68,19 @@ Clone-free on the host, reproducible by lock file:
    ```
    Do everything from here on over SSH.
    Server-side commands below use `$(hostname -s)` so you don't need to manually export `CLUSTER`.
-6. On the server, create/install an age key for SOPS decryption (one-time):
+6. On the server, rebuild once to let `sops-nix` create the persistent age key automatically:
    ```bash
-   mkdir -p ~/.config/sops/age
-   chmod 700 ~/.config/sops ~/.config/sops/age
-   if [ ! -s ~/.config/sops/age/keys.txt ]; then
-     nix --extra-experimental-features "nix-command flakes" shell nixpkgs#age --command age-keygen -o ~/.config/sops/age/keys.txt
-   fi
-   chmod 600 ~/.config/sops/age/keys.txt
-
-   sudo install -d -m 0700 -o root -g root /var/lib/sops-nix
-   sudo install -m 0600 -o root -g root ~/.config/sops/age/keys.txt /var/lib/sops-nix/key.txt
-   ```
-7. On the server, create/update Flux's SOPS key secret and rebuild:
-   ```bash
-   kubectl -n flux-system create secret generic sops-age \
-     --from-file=age.agekey=$HOME/.config/sops/age/keys.txt \
-     --dry-run=client -o yaml | kubectl apply -f -
-
    sudo nixos-rebuild switch --flake /etc/nixos#$(hostname -s)
    ```
-8. From your local machine, install the same age key, edit encrypted secrets, then commit/push:
+7. From your local machine, install the same key for `sops edit` (one-time):
    ```bash
    mkdir -p ~/.config/sops/age
-   scp aiden@<IP>:~/.config/sops/age/keys.txt ~/.config/sops/age/keys.txt
+   ssh aiden@<IP> 'sudo cat /var/lib/sops-nix/key.txt' > ~/.config/sops/age/keys.txt
    chmod 600 ~/.config/sops/age/keys.txt
+   ```
 
+8. Edit encrypted secrets, then commit/push:
+   ```bash
    # install once (pick one)
    # macOS: brew install sops age
    # Nix: nix shell nixpkgs#sops nixpkgs#age
@@ -136,6 +123,7 @@ kubectl -n flux-system rollout status deployment/kustomize-controller --timeout=
 kubectl -n flux-system rollout status deployment/helm-controller --timeout=5m
 
 kubectl apply -f /etc/homelab/source/flux/clusters/${CLUSTER}/manifests/cluster/namespaces.yaml
+sudo systemctl start homelab-ensure-flux-sops-age.service
 kubectl -n flux-system get secret sops-age
 
 kubectl apply -f /etc/homelab/source/flux/clusters/${CLUSTER}/flux-system-sync.yaml

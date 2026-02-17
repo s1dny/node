@@ -48,7 +48,6 @@ in
   };
 
   environment.etc."homelab/source".source = homelabSrc;
-  environment.etc."homelab/cloudflare/tunnel-token.env.example".source = "${homelabSrc}/cloudflare/tunnel-token.env.example";
   environment.etc."homelab/host-secrets/kopia-r2.env.example".source = "${homelabSrc}/nixos/secrets/kopia-r2.env.example";
 
   environment.systemPackages = with pkgs; [
@@ -97,7 +96,10 @@ in
     CLUSTER = config.networking.hostName;
   };
 
-  sops.age.keyFile = homelabSopsAgeKeyFile;
+  sops.age = {
+    keyFile = homelabSopsAgeKeyFile;
+    generateKey = true;
+  };
   sops.secrets."homelab/cloudflare-tunnel-token.env" = {
     sopsFile = homelabHostSecretsSopsFile;
     format = "yaml";
@@ -156,6 +158,52 @@ in
 
       exec ${pkgs.cloudflared}/bin/cloudflared tunnel --no-autoupdate run --token "$CLOUDFLARE_TUNNEL_TOKEN"
     '';
+  };
+
+  systemd.services.homelab-ensure-flux-sops-age = {
+    description = "Ensure flux-system/sops-age secret exists";
+    after = [ "k3s.service" "network-online.target" ];
+    wants = [ "k3s.service" "network-online.target" ];
+    path = [ pkgs.kubectl pkgs.bash pkgs.coreutils ];
+    serviceConfig = {
+      Type = "oneshot";
+      User = "root";
+    };
+    script = ''
+      set -euo pipefail
+      export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+
+      if [[ ! -s "${homelabSopsAgeKeyFile}" ]]; then
+        echo "homelab-ensure-flux-sops-age: key file ${homelabSopsAgeKeyFile} is missing"
+        exit 0
+      fi
+
+      if [[ ! -r "$KUBECONFIG" ]]; then
+        echo "homelab-ensure-flux-sops-age: kubeconfig is not readable yet"
+        exit 0
+      fi
+
+      if ! kubectl --request-timeout=5s get namespace flux-system >/dev/null 2>&1; then
+        echo "homelab-ensure-flux-sops-age: flux-system namespace not present yet"
+        exit 0
+      fi
+
+      kubectl -n flux-system create secret generic sops-age \
+        --from-file=age.agekey="${homelabSopsAgeKeyFile}" \
+        --dry-run=client -o yaml \
+        | kubectl apply -f -
+    '';
+  };
+
+  systemd.timers.homelab-ensure-flux-sops-age = {
+    description = "Reconcile flux-system/sops-age secret";
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnBootSec = "2m";
+      OnUnitActiveSec = "15m";
+      RandomizedDelaySec = "1m";
+      Persistent = true;
+    };
   };
 
   systemd.tmpfiles.rules = [
