@@ -1,8 +1,17 @@
 {
   description = "Homelab NixOS module and deployment assets";
 
-  outputs = { self }: {
-    nixosModules.default = import ./nixos/homelab-module.nix;
+  inputs = {
+    sops-nix.url = "github:Mic92/sops-nix";
+  };
+
+  outputs = { self, sops-nix, ... }: {
+    nixosModules.default = { ... }: {
+      imports = [
+        sops-nix.nixosModules.sops
+        ./nixos/homelab-module.nix
+      ];
+    };
     nixosModules.homelab = self.nixosModules.default;
 
     templates.host-bootstrap = {

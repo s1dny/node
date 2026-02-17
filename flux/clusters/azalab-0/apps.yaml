@@ -6,6 +6,10 @@ metadata:
 spec:
   dependsOn:
     - name: infrastructure
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age
   interval: 10m0s
   path: ./flux/clusters/azalab-0/manifests
   prune: true

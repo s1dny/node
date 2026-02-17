@@ -3,9 +3,11 @@
 let
   homelabSrc = ../.;
   homelabSourcePath = "/etc/homelab/source";
-  homelabHostSecretsDir = "/etc/homelab/host-secrets";
-  homelabCloudflaredSecretsFile = "/etc/homelab/cloudflare/tunnel-token.env";
-  homelabKopiaR2SecretsFile = "${homelabHostSecretsDir}/kopia-r2.env";
+  homelabRuntimeSecretsDir = "/run/secrets/homelab";
+  homelabCloudflaredSecretsFile = "${homelabRuntimeSecretsDir}/cloudflare-tunnel-token.env";
+  homelabKopiaR2SecretsFile = "${homelabRuntimeSecretsDir}/kopia-r2.env";
+  homelabHostSecretsSopsFile = "${homelabSrc}/nixos/secrets/host-secrets.sops.yaml";
+  homelabSopsAgeKeyFile = "/var/lib/sops-nix/key.txt";
   defaultHostHostname = "azalab-0";
   defaultHostUsername = "aiden";
   defaultHostAuthorizedKeys = [
@@ -48,12 +50,6 @@ in
   environment.etc."homelab/source".source = homelabSrc;
   environment.etc."homelab/cloudflare/tunnel-token.env.example".source = "${homelabSrc}/cloudflare/tunnel-token.env.example";
   environment.etc."homelab/host-secrets/kopia-r2.env.example".source = "${homelabSrc}/nixos/secrets/kopia-r2.env.example";
-  environment.etc."homelab/k8s-secrets/libsql-auth.env.example".source = "${homelabSrc}/flux/clusters/azalab-0/manifests/apps/libsql/libsql-auth.env.example";
-  environment.etc."homelab/k8s-secrets/kopia-auth.env.example".source = "${homelabSrc}/flux/clusters/azalab-0/manifests/apps/kopia/kopia-auth.env.example";
-  environment.etc."homelab/k8s-secrets/immich-db-secret.env.example".source = "${homelabSrc}/flux/clusters/azalab-0/manifests/apps/immich/immich-db-secret.env.example";
-  environment.etc."homelab/k8s-secrets/immich-redis-secret.env.example".source = "${homelabSrc}/flux/clusters/azalab-0/manifests/apps/immich/immich-redis-secret.env.example";
-  environment.etc."homelab/k8s-secrets/vaultwarden-secret.env.example".source = "${homelabSrc}/flux/clusters/azalab-0/manifests/apps/vaultwarden/vaultwarden-secret.env.example";
-  environment.etc."homelab/k8s-secrets/tuwunel-secret.env.example".source = "${homelabSrc}/flux/clusters/azalab-0/manifests/apps/tuwunel/tuwunel-secret.env.example";
 
   environment.systemPackages = with pkgs; [
     git
@@ -68,6 +64,8 @@ in
     k3s
     kopia
     cloudflared
+    sops
+    age
     neovim
     eza
     claude-code
@@ -97,6 +95,27 @@ in
   environment.sessionVariables = {
     KUBECONFIG = "/etc/rancher/k3s/k3s.yaml";
     CLUSTER = config.networking.hostName;
+  };
+
+  sops.age.keyFile = homelabSopsAgeKeyFile;
+  sops.secrets."homelab/cloudflare-tunnel-token.env" = {
+    sopsFile = homelabHostSecretsSopsFile;
+    format = "yaml";
+    key = "cloudflare_tunnel_token_env";
+    path = homelabCloudflaredSecretsFile;
+    owner = "root";
+    group = "root";
+    mode = "0400";
+    restartUnits = [ "cloudflared-dashboard-tunnel.service" ];
+  };
+  sops.secrets."homelab/kopia-r2.env" = {
+    sopsFile = homelabHostSecretsSopsFile;
+    format = "yaml";
+    key = "kopia_r2_env";
+    path = homelabKopiaR2SecretsFile;
+    owner = "root";
+    group = "root";
+    mode = "0400";
   };
 
   services.k3s = {
@@ -141,9 +160,7 @@ in
 
   systemd.tmpfiles.rules = [
     "d /etc/homelab 0755 root root -"
-    "d /etc/homelab/cloudflare 0750 root wheel -"
-    "d /etc/homelab/host-secrets 0750 root wheel -"
-    "d /etc/homelab/k8s-secrets 0750 root wheel -"
+    "d /var/lib/sops-nix 0700 root root -"
     "d /var/lib/homelab 0755 root root -"
     "d /var/lib/homelab/generated 0750 root wheel -"
     "d /var/lib/homelab/generated/k8s 0750 root wheel -"
