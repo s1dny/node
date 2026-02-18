@@ -37,7 +37,7 @@ spec:
             - |
               set -euxo pipefail
               mkdir -p /zeroclaw-data/bin
-              BUILD_REV="matrix-mention-only-v1"
+              BUILD_REV="matrix-mention-only-v4"
               if [ -x /zeroclaw-data/bin/zeroclaw ] && [ -f /zeroclaw-data/bin/.build-rev ] && [ "$(cat /zeroclaw-data/bin/.build-rev)" = "$BUILD_REV" ]; then
                 exit 0
               fi
@@ -56,13 +56,18 @@ spec:
               a\
                                   // In group rooms, reply only when explicitly mentioned.\
                                   let lower_body = body.to_ascii_lowercase();\
-                                  if !lower_body.contains("@aza") {\
+                                  let lower_trim = lower_body.trim_start();\
+                                  let mentioned = lower_trim.contains("@aza")\
+                                      || lower_trim.starts_with("aza:")\
+                                      || lower_trim.starts_with("aza,")\
+                                      || lower_trim.starts_with("aza ");\
+                                  if !mentioned {\
                                       continue;\
                                   }
               }
               SED
               sed -i -f /tmp/matrix-mention-only.sed src/channels/matrix.rs
-              grep -q 'lower_body.contains("@aza")' src/channels/matrix.rs
+              grep -q 'lower_trim.contains("@aza")' src/channels/matrix.rs
               echo "matrix mention-only patch applied"
 
               cargo build --release --locked
