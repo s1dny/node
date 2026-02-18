@@ -152,24 +152,7 @@ Put `photos.aza.network` and `kopia.aza.network` behind Cloudflare Access. Don't
    ```
    Then commit the same change to `flux/clusters/<cluster>/manifests/apps/vaultwarden/manifest.yaml` in Git so it persists across rebuilds.
 
-## 7) Tuwunel (Matrix homeserver)
-1. After deploy, verify it's running:
-   ```bash
-   kubectl -n tuwunel get pods
-   curl -s https://matrix.aza.network/_matrix/client/versions
-   ```
-2. Registration is token-gated by default (`TUWUNEL_ALLOW_REGISTRATION=true` + `TUWUNEL_REGISTRATION_TOKEN`).
-3. Set `TUWUNEL_REGISTRATION_TOKEN` in `flux/clusters/<cluster>/manifests/apps/secrets.sops.yaml`, commit and push, then on server run:
-   ```bash
-   cd /etc/nixos
-   sudo nix flake update homelab
-   sudo nixos-rebuild switch --flake /etc/nixos#$(hostname -s)
-   kubectl -n flux-system annotate kustomization apps kustomize.toolkit.fluxcd.io/reconcileAt="$(date -Iseconds)" --overwrite
-   kubectl -n flux-system wait --for=condition=Ready=True kustomization/apps --timeout=10m
-   ```
-4. Register users in your Matrix client (e.g. Element) using that token.
-
-## 8) Kopia backups
+## 7) Kopia backups
 `flux/clusters/<cluster>/manifests/apps/kopia/manifest.yaml` uses `--insecure` and `--disable-csrf-token-checks`. Keep `kopia.aza.network` behind Cloudflare Access.
 
 `KOPIA_R2_ENDPOINT` format: `https://<accountid>.r2.cloudflarestorage.com`
@@ -180,7 +163,7 @@ sudo systemctl start kopia-host-backup.service
 sudo systemctl start kopia-r2-sync.service
 ```
 
-## 9) MacBook backup
+## 8) MacBook backup
 ```bash
 brew install cloudflared kopia
 cloudflared access tcp --hostname kopia.aza.network --url localhost:15151
@@ -197,22 +180,22 @@ kopia repository connect server \
 kopia snapshot create ~/Documents ~/Pictures ~/Desktop
 ```
 
-## 10) Verification
+## 9) Verification
+Run the built-in health check first:
 ```bash
 homelab-check-k8s-health
 ```
 
-Manual checks:
+Verify Flux and workloads are healthy:
 ```bash
-sudo systemctl status cloudflared-dashboard-tunnel --no-pager
+kubectl -n flux-system get gitrepository flux-system
+kubectl -n flux-system get kustomization flux-system infrastructure apps
+kubectl -n flux-system get helmreleases -A
 kubectl get pods -A
-kubectl -n flux-system get gitrepositories,kustomizations
-kubectl -n immich get helmreleases
-kubectl -n libsql get ingress,svc,pods
-kubectl -n immich get ingress,svc,pods
-kubectl -n backup get ingress,svc,pods
-kubectl -n vaultwarden get ingress,svc,pods
-kubectl -n tuwunel get ingress,svc,pods
-sudo journalctl -u kopia-host-backup.service -n 100 --no-pager
-sudo journalctl -u kopia-r2-sync.service -n 100 --no-pager
 ```
+
+## 10) Samba file share
+Samba is enabled by the homelab module with a guest-writeable share:
+- Share name: `public`
+- Path: `/srv/samba/public`
+- Discovery: `wsdd` is enabled for Windows network discovery

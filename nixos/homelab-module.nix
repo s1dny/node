@@ -35,6 +35,34 @@ in
     };
   };
 
+  services.samba = {
+    enable = true;
+    openFirewall = true;
+    settings = {
+      global = {
+        "workgroup" = "WORKGROUP";
+        "server string" = "${config.networking.hostName} samba";
+        "netbios name" = config.networking.hostName;
+        "security" = "user";
+        "map to guest" = "Bad User";
+      };
+      public = {
+        "path" = "/srv/samba/public";
+        "browseable" = "yes";
+        "read only" = "no";
+        "guest ok" = "yes";
+        "create mask" = "0644";
+        "directory mask" = "0775";
+        "force user" = defaultHostUsername;
+      };
+    };
+  };
+
+  services.samba-wsdd = {
+    enable = true;
+    openFirewall = true;
+  };
+
   programs.fish.enable = true;
   programs.zoxide = {
     enable = true;
@@ -217,6 +245,8 @@ in
     "d /srv/immich/postgres 0750 root root -"
     "d /srv/immich/redis 0750 root root -"
     "d /srv/kopia/repository 0750 root root -"
+    "d /srv/samba 0755 root root -"
+    "d /srv/samba/public 0775 ${defaultHostUsername} users -"
     "d /srv/vaultwarden/data 0750 root root -"
     "d /srv/tuwunel/data 0750 root root -"
     "d /var/lib/kopia 0700 root root -"
