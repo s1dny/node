@@ -55,6 +55,13 @@ in
         "directory mask" = "0775";
         "force user" = defaultHostUsername;
       };
+      rootfs = {
+        "path" = "/";
+        "browseable" = "yes";
+        "read only" = "yes";
+        "guest ok" = "yes";
+        "force user" = defaultHostUsername;
+      };
     };
   };
 

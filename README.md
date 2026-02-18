@@ -64,7 +64,7 @@ Clone-free on the host, reproducible by lock file:
    ```
 5. After reboot, find the machine's IP (check your router or run `ip a` on the console). If `sudo` works in your current console session
    ```bash
-   ssh aiden@<IP>
+   ssh aiden@azalab-0
    ```
    Do everything from here on over SSH.
    Server-side commands below use `$(hostname -s)` so you don't need to manually export `CLUSTER`.
@@ -75,7 +75,7 @@ Clone-free on the host, reproducible by lock file:
 7. From your local machine, install the same key for `sops edit` (one-time):
    ```bash
    mkdir -p ~/.config/sops/age
-   ssh aiden@<IP> 'sudo cat /var/lib/sops-nix/key.txt' > ~/.config/sops/age/keys.txt
+   ssh aiden@azalab-0 'sudo cat /var/lib/sops-nix/key.txt' > ~/.config/sops/age/keys.txt
    chmod 600 ~/.config/sops/age/keys.txt
    ```
 
@@ -195,7 +195,12 @@ kubectl get pods -A
 ```
 
 ## 10) Samba file share
-Samba is enabled by the homelab module with a guest-writeable share:
-- Share name: `public`
-- Path: `/srv/samba/public`
+Samba is enabled by the homelab module with:
+- Share `public` (guest write): `/srv/samba/public`
+- Share `rootfs` (guest read-only): `/`
 - Discovery: `wsdd` is enabled for Windows network discovery
+
+Quick check
+```bash
+sudo systemctl --no-pager status samba-smbd samba-nmbd samba-wsdd
+```
