@@ -21,7 +21,7 @@ Set:
 - `[channels_config.matrix].room_id`
 - `[channels_config.matrix].allowed_users`
 
-Note: current upstream Zeroclaw sets OpenRouter model IDs but does not expose OpenRouter's `provider` request field. Endpoint pinning to a specific provider is not hard-enforced from this config alone.
+Note: this deployment patches upstream Zeroclaw at build time to send OpenRouter `provider: { sort = "throughput" }`, so requests are auto-routed to the highest-throughput provider for the selected model.
 
 ## 2) Update secret in Git (SOPS)
 
