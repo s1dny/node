@@ -112,7 +112,7 @@ spec:
             - name: ZEROCLAW_WORKSPACE
               value: /zeroclaw-data/workspace
             - name: ZEROCLAW_MODEL
-              value: moonshotai/kimi-k2.5
+              value: moonshotai/kimi-k2-0905:exacto
           securityContext:
             runAsUser: 65534
             runAsGroup: 65534
