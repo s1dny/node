@@ -112,7 +112,7 @@ spec:
             - name: ZEROCLAW_WORKSPACE
               value: /zeroclaw-data/workspace
             - name: ZEROCLAW_MODEL
-              value: openai/gpt-oss-120b
+              value: moonshotai/kimi-k2.5
           securityContext:
             runAsUser: 65534
             runAsGroup: 65534
