@@ -196,11 +196,10 @@ kubectl get pods -A
 
 ## 10) Samba file share
 Samba is enabled by the homelab module with:
-- Share `public` (guest write): `/srv/samba/public`
-- Share `rootfs` (guest read-only): `/`
+- Share `srv` (guest write): `/srv`
 - Discovery: `wsdd` is enabled for Windows network discovery
 
-Quick check
+Quick check:
 ```bash
 sudo systemctl --no-pager status samba-smbd samba-nmbd samba-wsdd
 ```

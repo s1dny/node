@@ -46,20 +46,13 @@ in
         "security" = "user";
         "map to guest" = "Bad User";
       };
-      public = {
-        "path" = "/srv/samba/public";
+      srv = {
+        "path" = "/srv";
         "browseable" = "yes";
         "read only" = "no";
         "guest ok" = "yes";
-        "create mask" = "0644";
+        "create mask" = "0664";
         "directory mask" = "0775";
-        "force user" = defaultHostUsername;
-      };
-      rootfs = {
-        "path" = "/";
-        "browseable" = "yes";
-        "read only" = "yes";
-        "guest ok" = "yes";
         "force user" = defaultHostUsername;
       };
     };
@@ -252,8 +245,7 @@ in
     "d /srv/immich/postgres 0750 root root -"
     "d /srv/immich/redis 0750 root root -"
     "d /srv/kopia/repository 0750 root root -"
-    "d /srv/samba 0755 root root -"
-    "d /srv/samba/public 0775 ${defaultHostUsername} users -"
+    "d /srv 0775 ${defaultHostUsername} users -"
     "d /srv/vaultwarden/data 0750 root root -"
     "d /srv/tuwunel/data 0750 root root -"
     "d /var/lib/kopia 0700 root root -"
