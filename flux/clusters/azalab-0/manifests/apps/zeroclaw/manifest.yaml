@@ -37,7 +37,7 @@ spec:
             - |
               set -euxo pipefail
               mkdir -p /zeroclaw-data/bin
-              BUILD_REV="matrix-mention-only-v5"
+              BUILD_REV="matrix-mention-only-v6"
               if [ -x /zeroclaw-data/bin/zeroclaw ] && [ -f /zeroclaw-data/bin/.build-rev ] && [ "$(cat /zeroclaw-data/bin/.build-rev)" = "$BUILD_REV" ]; then
                 exit 0
               fi
@@ -73,8 +73,17 @@ spec:
               # Force OpenRouter to route by highest throughput and fail fast on empty completions.
               perl -0777 -i -pe 's/struct ChatRequest \{\n(.*?)temperature: f64,\n\}/struct ChatRequest {\n$1temperature: f64,\n    provider: serde_json::Value,\n}/s' src/providers/openrouter.rs
               perl -0777 -i -pe 's/struct NativeChatRequest \{\n(.*?)tool_choice: Option<String>,\n\}/struct NativeChatRequest {\n$1tool_choice: Option<String>,\n    provider: serde_json::Value,\n}/s' src/providers/openrouter.rs
-              perl -0777 -i -pe 's/(let request = ChatRequest \{[\s\S]*?temperature,\n)(\s*)\};/$1$2provider: serde_json::json!({ "sort": "throughput" }),\n$2};/g' src/providers/openrouter.rs
-              perl -0777 -i -pe 's/(let native_request = NativeChatRequest \{[\s\S]*?tool_choice: [^\n]*,\n)(\s*)\};/$1$2provider: serde_json::json!({ "sort": "throughput" }),\n$2};/g' src/providers/openrouter.rs
+              cat <<'SED' | sed 's/^              //' > /tmp/openrouter-provider-sort.sed
+              /let request = ChatRequest {/,/};/ {
+                /temperature,/a\
+                              provider: serde_json::json!({ "sort": "throughput" }),
+              }
+              /let native_request = NativeChatRequest {/,/};/ {
+                /tool_choice:/a\
+                              provider: serde_json::json!({ "sort": "throughput" }),
+              }
+              SED
+              sed -i -f /tmp/openrouter-provider-sort.sed src/providers/openrouter.rs
               perl -0777 -i -pe 's/chat_response\n\s*\.choices\n\s*\.into_iter\(\)\n\s*\.next\(\)\n\s*\.map\(\|c\| c\.message\.content\)\n\s*\.ok_or_else\(\|\| anyhow::anyhow!\("No response from OpenRouter"\)\)/let text = chat_response\n            .choices\n            .into_iter()\n            .next()\n            .map(|c| c.message.content)\n            .ok_or_else(|| anyhow::anyhow!("No response from OpenRouter"))?;\n        if text.trim().is_empty() {\n            anyhow::bail!("OpenRouter returned an empty completion");\n        }\n        Ok(text)/g' src/providers/openrouter.rs
               perl -0777 -i -pe 's/Ok\(Self::parse_native_response\(message\)\)/let parsed = Self::parse_native_response(message);\n        if parsed.text.as_deref().unwrap_or("").trim().is_empty() && parsed.tool_calls.is_empty() {\n            anyhow::bail!("OpenRouter returned an empty completion");\n        }\n        Ok(parsed)/g' src/providers/openrouter.rs
               grep -q 'provider: serde_json::json!({ "sort": "throughput" })' src/providers/openrouter.rs
