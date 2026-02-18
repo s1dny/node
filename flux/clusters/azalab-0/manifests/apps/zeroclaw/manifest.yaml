@@ -35,9 +35,10 @@ spec:
             - /bin/bash
             - -ec
             - |
-              set -euo pipefail
+              set -euxo pipefail
               mkdir -p /zeroclaw-data/bin
-              if [ -x /zeroclaw-data/bin/zeroclaw ]; then
+              BUILD_REV="matrix-mention-only-v1"
+              if [ -x /zeroclaw-data/bin/zeroclaw ] && [ -f /zeroclaw-data/bin/.build-rev ] && [ "$(cat /zeroclaw-data/bin/.build-rev)" = "$BUILD_REV" ]; then
                 exit 0
               fi
 
@@ -47,9 +48,27 @@ spec:
 
               git clone --depth 1 https://github.com/zeroclaw-labs/zeroclaw.git /tmp/zeroclaw-src
               cd /tmp/zeroclaw-src
+
+              cat <<'SED' | sed 's/^              //' > /tmp/matrix-mention-only.sed
+              /let Some(ref body) = event.content.body else {/{
+              n
+              n
+              a\
+                                  // In group rooms, reply only when explicitly mentioned.\
+                                  let lower_body = body.to_ascii_lowercase();\
+                                  if !lower_body.contains("@aza") {\
+                                      continue;\
+                                  }
+              }
+              SED
+              sed -i -f /tmp/matrix-mention-only.sed src/channels/matrix.rs
+              grep -q 'lower_body.contains("@aza")' src/channels/matrix.rs
+              echo "matrix mention-only patch applied"
+
               cargo build --release --locked
               install -m 0755 target/release/zeroclaw /zeroclaw-data/bin/zeroclaw
-              chown 65534:65534 /zeroclaw-data/bin/zeroclaw
+              printf '%s\n' "$BUILD_REV" > /zeroclaw-data/bin/.build-rev
+              chown 65534:65534 /zeroclaw-data/bin/zeroclaw /zeroclaw-data/bin/.build-rev
           volumeMounts:
             - name: data
               mountPath: /zeroclaw-data
