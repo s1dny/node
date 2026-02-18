@@ -1,0 +1,24 @@
+workspace_dir = "/zeroclaw-data/workspace"
+config_path = "/zeroclaw-data/.zeroclaw/config.toml"
+api_key = "REPLACE_WITH_LLM_API_KEY"
+default_provider = "openrouter"
+default_model = "moonshotai/kimi-k2.5:nitro"
+default_temperature = 0.7
+
+[memory]
+backend = "sqlite"
+auto_save = true
+
+[gateway]
+host = "127.0.0.1"
+port = 8080
+allow_public_bind = false
+
+[channels_config]
+cli = false
+
+[channels_config.matrix]
+homeserver = "https://matrix.aza.network"
+access_token = "syt_REPLACE_WITH_MATRIX_ACCESS_TOKEN"
+room_id = "!fTdoLwbr7rJLXrhoHa:matrix.aza.network"
+allowed_users = ["@aiden:matrix.aza.network", "@jakob:sadairs.com"]

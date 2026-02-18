@@ -1,0 +1,93 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zeroclaw
+  namespace: zeroclaw
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: zeroclaw
+  template:
+    metadata:
+      labels:
+        app: zeroclaw
+    spec:
+      initContainers:
+        - name: init-data-dir
+          image: alpine:3.20
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              mkdir -p /zeroclaw-data/.zeroclaw /zeroclaw-data/workspace
+              chown -R 65534:65534 /zeroclaw-data
+          volumeMounts:
+            - name: data
+              mountPath: /zeroclaw-data
+        - name: build-zeroclaw
+          image: rust:1.93-slim
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/bash
+            - -ec
+            - |
+              set -euo pipefail
+              mkdir -p /zeroclaw-data/bin
+              if [ -x /zeroclaw-data/bin/zeroclaw ]; then
+                exit 0
+              fi
+
+              apt-get update
+              apt-get install -y --no-install-recommends git pkg-config ca-certificates
+              rm -rf /var/lib/apt/lists/*
+
+              git clone --depth 1 https://github.com/zeroclaw-labs/zeroclaw.git /tmp/zeroclaw-src
+              cd /tmp/zeroclaw-src
+              cargo build --release --locked
+              install -m 0755 target/release/zeroclaw /zeroclaw-data/bin/zeroclaw
+              chown 65534:65534 /zeroclaw-data/bin/zeroclaw
+          volumeMounts:
+            - name: data
+              mountPath: /zeroclaw-data
+      containers:
+        - name: zeroclaw
+          image: rust:1.93-slim
+          imagePullPolicy: IfNotPresent
+          command:
+            - /zeroclaw-data/bin/zeroclaw
+          args:
+            - channel
+            - start
+          env:
+            - name: HOME
+              value: /zeroclaw-data
+            - name: ZEROCLAW_WORKSPACE
+              value: /zeroclaw-data/workspace
+          securityContext:
+            runAsUser: 65534
+            runAsGroup: 65534
+          volumeMounts:
+            - name: data
+              mountPath: /zeroclaw-data
+            - name: config
+              mountPath: /zeroclaw-data/.zeroclaw/config.toml
+              subPath: config.toml
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: zeroclaw-data-pvc
+        - name: config
+          secret:
+            secretName: zeroclaw-config
