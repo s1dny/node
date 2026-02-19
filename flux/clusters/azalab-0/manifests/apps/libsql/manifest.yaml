@@ -23,7 +23,7 @@ spec:
             - name: SQLD_HTTP_LISTEN_ADDR
               value: 0.0.0.0:8080
             - name: SQLD_DB_PATH
-              value: /var/lib/sqld
+              value: /var/lib/sqld/iku.db
             - name: SQLD_AUTH_JWT_KEY
               valueFrom:
                 secretKeyRef:
