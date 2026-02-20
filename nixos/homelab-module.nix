@@ -27,6 +27,8 @@ in
     allowedTCPPorts = [ 22 6443 ];
   };
 
+  virtualisation.docker.enable = true;
+
   services.openssh = {
     enable = true;
     settings = {
@@ -312,7 +314,7 @@ in
 
   users.users.${defaultHostUsername} = {
     isNormalUser = true;
-    extraGroups = [ "wheel" "networkmanager" ];
+    extraGroups = [ "wheel" "networkmanager" "docker" ];
     shell = pkgs.fish;
     openssh.authorizedKeys.keys = defaultHostAuthorizedKeys;
   };

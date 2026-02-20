@@ -5,6 +5,7 @@ Personal homelab configuration for a Dell Optiplex 7060 running NixOS with k3s. 
 ## What's running
 - NixOS on bare metal
 - k3s for orchestration
+- Docker (enabled declaratively by the homelab module)
 - Cloudflare Tunnels
 - Kopia backup server at `https://kopia.aza.network`, replicated to Cloudflare R2
 - MacBook backups to Optiplex via Kopia + Cloudflare Access
