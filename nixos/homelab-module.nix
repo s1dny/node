@@ -85,6 +85,7 @@ in
     curl
     jq
     yq-go
+    gcc
     rustc
     cargo
     python3
