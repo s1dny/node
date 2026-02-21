@@ -1,6 +1,6 @@
 # AGENTS
 
-## Project Overview
+## Overview
 
 NixOS homelab infrastructure for a Dell Optiplex 7060 (`azalab-0`) running k3s. The repo is a Nix flake that provides a NixOS module (`nixosModules.default`) consumed by a host bootstrap flake on the server at `/etc/nixos/flake.nix`. The repo is never cloned on the host — NixOS pins it via `flake.lock` and mounts the pinned source read-only at `/etc/homelab/source`.
 
@@ -34,27 +34,8 @@ flake.nix                       # Flake entry — exports nixosModules.default
 └── templates/host-bootstrap/   # Template for new host /etc/nixos flake
 ```
 
-**Deployment flow:** Push to `main` → Flux auto-syncs K8s manifests (1m interval). NixOS host config requires manual `sudo nix flake update homelab && sudo nixos-rebuild switch --flake /etc/nixos#$(hostname -s)`.
-
-## Development Commands
-
-```bash
-# Validate Nix syntax
-nix flake check
-
-# Show flake outputs
-nix flake show
-
-# Edit encrypted secrets (requires age key in ~/.config/sops/age/keys.txt)
-sops edit nixos/secrets/host-secrets.sops.yaml
-sops edit flux/clusters/azalab-0/manifests/apps/secrets.sops.yaml
-
-# Apply NixOS changes on host (over SSH)
-ssh aiden@azalab-0 'cd /etc/nixos && sudo nix flake update homelab && sudo nixos-rebuild switch --flake /etc/nixos#$(hostname -s)'
-
-# Check cluster health (on host)
-homelab-check-k8s-health
-```
+## Deployment
+The flow is push git changes to `main` -> Flux auto-syncs K8s manifests (1m interval). NixOS host config requires manual `sudo nix flake update homelab && sudo nixos-rebuild switch --flake /etc/nixos#$(hostname -s)`.
 
 ## Key Technical Details
 
@@ -66,18 +47,11 @@ homelab-check-k8s-health
 - **Default user**: `aiden`, groups: wheel/networkmanager/docker, shell: fish, SSH key-only auth.
 - **NixOS version**: 25.11 (pinned in host flake.lock). Flake input: `sops-nix`.
 
-## Conventions
-
-- K8s manifests use raw YAML with Kustomize overlays, not Helm (except Immich which uses a HelmRelease).
-- Flux Kustomizations chain: `flux-system` → `infrastructure` → `apps` (each waits for the previous).
-- Host config is a single monolithic NixOS module (`homelab-module.nix`), not split into per-service files.
-- Systemd services/timers for backup and secret reconciliation are defined inline in the NixOS module.
-
-## Execution Policy
+## Policy
 - Execute tasks end-to-end by default. Do not ask the user to run commands you can run yourself.
 - Ask the user to do something only when truly blocked by one of these:
   - Interactive authentication the agent cannot complete (for example, sudo password prompts).
   - Missing secret values or credentials the agent cannot infer.
   - Explicit user approval required for destructive or out-of-sandbox actions.
 - If blocked by permissions, attempt the command and then request escalation/approval; do not hand the task back to the user as a first response.
-- Report actions taken and results; avoid replacing execution with instructions.
+- Report actions taken and results.
