@@ -89,6 +89,7 @@ in
     rustc
     cargo
     python3
+    sqlite
     kubectl
     kubernetes-helm
     k3s
