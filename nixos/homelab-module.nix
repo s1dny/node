@@ -100,9 +100,6 @@ in
     age
     neovim
     eza
-    claude-code
-    codex
-    opencode
 
     (writeShellScriptBin "homelab-check-k8s-health" ''
       set -euo pipefail
