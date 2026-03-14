@@ -86,6 +86,9 @@ in
     jq
     yq-go
     gcc
+    pkg-config
+    libclang
+    libxml2
     rustc
     cargo
     bun
