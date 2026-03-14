@@ -128,9 +128,8 @@ in
   environment.variables = {
     PKG_CONFIG_PATH = lib.makeSearchPath "lib/pkgconfig" [ pkgs.libxml2.dev ];
     LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
-    BINDGEN_EXTRA_CLANG_ARGS = lib.concatStringsSep " " [
-      "-isystem${pkgs.glibc.dev}/include"
-    ];
+    BINDGEN_EXTRA_CLANG_ARGS =
+      builtins.readFile "${pkgs.stdenv.cc}/nix-support/libc-cflags";
   };
 
   environment.sessionVariables = {
