@@ -88,6 +88,7 @@ in
     gcc
     rustc
     cargo
+    bun
     python3
     sqlite
     kubectl
