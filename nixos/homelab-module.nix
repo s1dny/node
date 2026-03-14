@@ -81,29 +81,30 @@ in
   environment.etc."homelab/host-secrets/kopia-r2.env.example".source = "${homelabSrc}/nixos/secrets/kopia-r2.env.example";
 
   environment.systemPackages = with pkgs; [
-    git
-    curl
-    jq
-    yq-go
-    gcc
-    pkg-config
-    libclang
-    libxml2
-    rustc
-    cargo
+    age
     bun
-    nodejs
-    python3
-    sqlite
-    kubectl
-    kubernetes-helm
+    cargo
+    cloudflared
+    curl
+    docker-buildx
+    eza
+    gcc
+    git
+    jq
     k3s
     kopia
-    cloudflared
-    sops
-    age
+    kubectl
+    kubernetes-helm
+    libclang
+    libxml2
     neovim
-    eza
+    nodejs
+    pkg-config
+    python3
+    rustc
+    sops
+    sqlite
+    yq-go
 
     (writeShellScriptBin "homelab-check-k8s-health" ''
       set -euo pipefail
