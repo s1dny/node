@@ -128,6 +128,8 @@ in
   environment.sessionVariables = {
     KUBECONFIG = "/etc/rancher/k3s/k3s.yaml";
     CLUSTER = config.networking.hostName;
+    PKG_CONFIG_PATH = lib.makeSearchPath "lib/pkgconfig" [ pkgs.libxml2.dev ];
+    LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
   };
 
   sops.age = {
