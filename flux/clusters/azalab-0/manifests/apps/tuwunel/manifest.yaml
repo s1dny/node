@@ -28,6 +28,8 @@ spec:
               value: "8008"
             - name: TUWUNEL_ADDRESS
               value: 0.0.0.0
+            - name: TUWUNEL_MAX_REQUEST_SIZE
+              value: "104857600"
             - name: TUWUNEL_ALLOW_REGISTRATION
               value: "true"
             - name: TUWUNEL_REGISTRATION_TOKEN
