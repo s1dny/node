@@ -162,11 +162,14 @@ Put `photos.aza.network` and `kopia.aza.network` behind Cloudflare Access. Don't
 
 `KOPIA_R2_ENDPOINT` format: `https://<accountid>.r2.cloudflarestorage.com`
 
-Timers run automatically (`kopia-host-backup.timer`, `kopia-r2-sync.timer`). Run manually if needed:
+Timers run automatically (`libsql-backup.timer`, `kopia-host-backup.timer`, `kopia-r2-sync.timer`). Run manually if needed:
 ```bash
+sudo systemctl start libsql-backup.service
 sudo systemctl start kopia-host-backup.service
 sudo systemctl start kopia-r2-sync.service
 ```
+
+`libsql-backup.timer` runs daily at `00:00` and writes full `/srv/libsql/data` directory archives to `/srv/libsql/backups` as `*.tar.zst`, which are then included in the nightly Kopia snapshot.
 
 ## 7) MacBook backup
 ```bash

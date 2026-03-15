@@ -105,6 +105,7 @@ in
     sops
     sqlite
     yq-go
+    zstd
 
     (writeShellScriptBin "homelab-check-k8s-health" ''
       set -euo pipefail
@@ -271,12 +272,32 @@ in
     "f /srv/immich/library/encoded-video/.immich 0664 ${defaultHostUsername} users -"
     "d /srv/immich/postgres 0700 999 999 -"
     "d /srv/immich/redis 0750 999 root -"
+    "d /srv/libsql/backups 0750 root root -"
     "d /srv/libsql/data 0750 root root -"
     "d /srv/kopia/repository 0750 root root -"
     "d /srv/vaultwarden/data 0750 root root -"
     "d /srv/tuwunel/data 0750 root root -"
     "d /var/lib/kopia 0700 root root -"
   ];
+
+  systemd.services.libsql-backup = {
+    description = "Backup libsql database with zstd compression";
+    path = [ pkgs.gnutar pkgs.zstd pkgs.coreutils pkgs.findutils ];
+    serviceConfig = {
+      Type = "oneshot";
+      User = "root";
+      ExecStart = "${pkgs.bash}/bin/bash ${homelabSourcePath}/scripts/libsql-backup.sh";
+    };
+  };
+
+  systemd.timers.libsql-backup = {
+    description = "Run libsql backup daily at midnight";
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnCalendar = "*-*-* 00:00:00";
+      Persistent = true;
+    };
+  };
 
   systemd.services.kopia-host-backup = {
     description = "Kopia host snapshots to local repository";
