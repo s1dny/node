@@ -33,6 +33,10 @@ cd /etc/nixos
 sudo nix flake update homelab
 sudo nixos-rebuild switch --flake /etc/nixos#$(hostname -s)
 ```
+or
+```bash
+sync.sh
+```
 
 `/etc/nixos/flake.lock` is the exact deployed source of truth for the host.
 

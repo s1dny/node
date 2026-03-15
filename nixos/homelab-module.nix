@@ -125,6 +125,10 @@ in
       kubectl get ingress -A
       kubectl get pvc -A
     '')
+
+    (writeShellScriptBin "sync.sh" ''
+      exec ${pkgs.bash}/bin/bash ${homelabSourcePath}/sync.sh "$@"
+    '')
   ];
 
   environment.variables = {
