@@ -10,8 +10,6 @@ resources:
   - apps/immich/release.yaml
   - apps/vaultwarden/manifest.yaml
   - apps/tuwunel/manifest.yaml
-  - apps/zeroclaw/secret.sops.yaml
-  - apps/zeroclaw/manifest.yaml
 
 configMapGenerator:
   - name: immich-values
