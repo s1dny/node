@@ -38,6 +38,11 @@ spec:
                 secretKeyRef:
                   name: kopia-auth
                   key: KOPIA_REPOSITORY_PASSWORD
+            - name: KOPIA_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: kopia-auth
+                  key: KOPIA_REPOSITORY_PASSWORD
             - name: KOPIA_SERVER_USERNAME
               valueFrom:
                 secretKeyRef:
