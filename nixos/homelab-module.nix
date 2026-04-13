@@ -88,7 +88,7 @@ in
     cloudflared
     curl
     docker-buildx
-    dust
+    dua
     eza
     gcc
     git
