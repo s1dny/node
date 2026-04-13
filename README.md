@@ -26,7 +26,11 @@ Clone-free on the host, reproducible by lock file:
 - `flux-system/sops-age`: Kubernetes Secret used by Flux for SOPS decryption
 
 ## Deployment workflow
-Git changes land in `main`, then Flux auto-syncs Kubernetes manifests on its normal reconciliation interval. Host-level NixOS changes are still applied manually on the machine with:
+Git changes land in `main`, then Flux auto-syncs Kubernetes manifests on its normal reconciliation interval.
+
+Host-level NixOS package updates are applied automatically by `homelab-auto-upgrade.timer`, which runs daily at `00:00`. It advances only the `nixpkgs` input in `/etc/nixos/flake.lock`, then rebuilds the host. This keeps packages like `cloudflared` current without editing version numbers by hand, while still leaving homelab config changes manual.
+
+Manual host-level NixOS changes are still applied on the machine with:
 
 ```bash
 cd /etc/nixos
@@ -38,7 +42,7 @@ or
 sync.sh
 ```
 
-`/etc/nixos/flake.lock` is the exact deployed source of truth for the host.
+`/etc/nixos/flake.lock` is the exact deployed source of truth for the host. The auto-upgrade timer mutates only the `nixpkgs` entry in that lock file.
 
 ## Prerequisites
 - Domain in Cloudflare: `aza.network`
@@ -119,7 +123,7 @@ In Cloudflare Zero Trust dashboard, create a tunnel named the same as your clust
 - `vault.aza.network` -> `http://localhost:80`
 - `matrix.aza.network` -> `http://localhost:80`
 
-Set `CLOUDFLARE_TUNNEL_TOKEN` in `nixos/secrets/host-secrets.sops.yaml` (`cloudflare_tunnel_token_env`) and rebuild.
+Set `CLOUDFLARE_TUNNEL_TOKEN` in `nixos/secrets/host-secrets.sops.yaml` (`cloudflare_tunnel_token_env`) and rebuild. `cloudflared` itself is supplied by `pkgs.cloudflared`, so newer packaged releases are picked up automatically by the host upgrade timer.
 
 ## 3) Bootstrap Flux and reconcile workloads
 Run this once per cluster (safe to rerun).

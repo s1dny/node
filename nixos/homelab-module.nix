@@ -3,6 +3,7 @@
 let
   homelabSrc = ../.;
   homelabSourcePath = "/etc/homelab/source";
+  homelabBootstrapFlakePath = "/etc/nixos";
   homelabRuntimeSecretsDir = "/run/secrets/homelab";
   homelabCloudflaredSecretsFile = "${homelabRuntimeSecretsDir}/cloudflare-tunnel-token.env";
   homelabKopiaR2SecretsFile = "${homelabRuntimeSecretsDir}/kopia-r2.env";
@@ -205,6 +206,35 @@ in
 
       exec ${pkgs.cloudflared}/bin/cloudflared tunnel --no-autoupdate run --token "$CLOUDFLARE_TUNNEL_TOKEN"
     '';
+  };
+
+  # Keep packages like cloudflared current by advancing only the nixpkgs input
+  # of the host bootstrap flake; homelab config changes still stay manual.
+  systemd.services.homelab-auto-upgrade = {
+    description = "Update nixpkgs input and rebuild the host";
+    after = [ "network-online.target" ];
+    wants = [ "network-online.target" ];
+    path = [ pkgs.nix pkgs.bash ];
+    serviceConfig = {
+      Type = "oneshot";
+      User = "root";
+      WorkingDirectory = homelabBootstrapFlakePath;
+    };
+    script = ''
+      set -euo pipefail
+
+      nix flake update nixpkgs --flake ${homelabBootstrapFlakePath}
+      exec /run/current-system/sw/bin/nixos-rebuild switch --flake ${homelabBootstrapFlakePath}#${config.networking.hostName}
+    '';
+  };
+
+  systemd.timers.homelab-auto-upgrade = {
+    description = "Run automatic nixpkgs upgrades for the host";
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnCalendar = "*-*-* 00:00:00";
+      Persistent = true;
+    };
   };
 
   systemd.services.homelab-ensure-flux-sops-age = {
