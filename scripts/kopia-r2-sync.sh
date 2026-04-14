@@ -19,5 +19,6 @@ kopia repository sync-to s3 \
   --bucket "${KOPIA_R2_BUCKET}" \
   --endpoint "${KOPIA_R2_ENDPOINT}" \
   --region auto \
+  --delete \
   --access-key "${KOPIA_R2_ACCESS_KEY_ID}" \
   --secret-access-key "${KOPIA_R2_SECRET_ACCESS_KEY}"
