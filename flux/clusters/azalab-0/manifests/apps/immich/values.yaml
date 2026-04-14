@@ -3,6 +3,7 @@ controllers:
     containers:
       main:
         image:
+          repository: ghcr.io/immich-app/immich-server
           tag: v2
         env:
           TZ: Australia/Sydney
