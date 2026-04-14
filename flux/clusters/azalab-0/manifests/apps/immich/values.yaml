@@ -4,7 +4,7 @@ controllers:
       main:
         image:
           repository: ghcr.io/immich-app/immich-server
-          tag: v2.7.3 # {"$imagepolicy": "flux-system:immich:tag"}
+          tag: v2.7.5 # {"$imagepolicy": "flux-system:immich:tag"}
         env:
           TZ: Australia/Sydney
           DB_HOSTNAME: immich-postgres
@@ -18,12 +18,10 @@ controllers:
                 key: postgres-password
           REDIS_HOSTNAME: immich-valkey
           REDIS_PORT: "6379"
-
 immich:
   persistence:
     library:
       existingClaim: immich-library-pvc
-
 valkey:
   enabled: true
   persistence:
@@ -31,7 +29,6 @@ valkey:
       enabled: true
       type: persistentVolumeClaim
       existingClaim: immich-redis-pvc
-
 server:
   ingress:
     main:
