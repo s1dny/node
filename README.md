@@ -44,10 +44,22 @@ sync.sh
 
 `/etc/nixos/flake.lock` is the exact deployed source of truth for the host. The auto-upgrade timer mutates only the `nixpkgs` entry in that lock file.
 
-## Dependency updates
-Renovate is configured in [renovate.json](/Users/aiden/plarza/node/renovate.json) to open pull requests for pinned dependencies in this repo, including Flux/Kubernetes container images and the Immich app tag override. Major updates require manual approval from the Renovate dependency dashboard before PRs are opened.
+## App updates
+Kubernetes app images are updated by Flux image automation instead of Renovate.
 
-To activate it, install the Renovate GitHub App for this repository. Once enabled, Renovate will propose Git changes and Flux will deploy them after you merge.
+There is one shared Flux image automation for the repo, and each app only adds a small image policy file plus a marker on the tag field Flux should rewrite.
+
+Immich is configured so Flux watches `ghcr.io/immich-app/immich-server`, selects the newest `2.x` tag, rewrites [values.yaml](/Users/aiden/plarza/node/flux/clusters/azalab-0/manifests/apps/immich/values.yaml), commits the change to `main`, and lets the normal GitOps reconciliation deploy it.
+
+This needs one write-capable Git secret in the cluster for the shared `flux-system-write` GitRepository:
+```bash
+kubectl -n flux-system create secret generic flux-system-write \
+  --from-literal=username=git \
+  --from-literal=password=YOUR_GITHUB_TOKEN \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
+
+Use a GitHub token that can push to this repository. The regular `flux-system` GitRepository stays read-only for normal syncs.
 
 ## Prerequisites
 - Domain in Cloudflare: `aza.network`
@@ -139,10 +151,16 @@ kubectl apply -f https://github.com/fluxcd/flux2/releases/download/v2.6.4/instal
 kubectl -n flux-system rollout status deployment/source-controller --timeout=5m
 kubectl -n flux-system rollout status deployment/kustomize-controller --timeout=5m
 kubectl -n flux-system rollout status deployment/helm-controller --timeout=5m
+kubectl -n flux-system rollout status deployment/image-reflector-controller --timeout=5m
+kubectl -n flux-system rollout status deployment/image-automation-controller --timeout=5m
 
 kubectl apply -f /etc/homelab/source/flux/clusters/${CLUSTER}/manifests/cluster/namespaces.yaml
 sudo systemctl start homelab-ensure-flux-sops-age.service
 kubectl -n flux-system get secret sops-age
+kubectl -n flux-system create secret generic flux-system-write \
+  --from-literal=username=git \
+  --from-literal=password=YOUR_GITHUB_TOKEN \
+  --dry-run=client -o yaml | kubectl apply -f -
 
 kubectl apply -f /etc/homelab/source/flux/clusters/${CLUSTER}/flux-system-sync.yaml
 kubectl -n flux-system wait --for=condition=Ready=True kustomization/flux-system --timeout=5m
