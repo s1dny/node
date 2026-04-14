@@ -44,6 +44,11 @@ sync.sh
 
 `/etc/nixos/flake.lock` is the exact deployed source of truth for the host. The auto-upgrade timer mutates only the `nixpkgs` entry in that lock file.
 
+## Dependency updates
+Renovate is configured in [renovate.json](/Users/aiden/plarza/node/renovate.json) to open pull requests for pinned dependencies in this repo, including Flux/Kubernetes container images and the Immich app tag override. Major updates require manual approval from the Renovate dependency dashboard before PRs are opened.
+
+To activate it, install the Renovate GitHub App for this repository. Once enabled, Renovate will propose Git changes and Flux will deploy them after you merge.
+
 ## Prerequisites
 - Domain in Cloudflare: `aza.network`
 - Cloudflare Zero Trust account
