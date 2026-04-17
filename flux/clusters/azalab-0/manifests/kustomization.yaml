@@ -13,6 +13,7 @@ resources:
   - apps/immich/stack.yaml
   - apps/vaultwarden/manifest.yaml
   - apps/tuwunel/manifest.yaml
+  - apps/paste/manifest.yaml
 
 configMapGenerator:
   - name: immich-values
