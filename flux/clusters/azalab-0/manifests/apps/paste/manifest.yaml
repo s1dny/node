@@ -16,7 +16,7 @@ spec:
       containers:
         - name: paste
           image: ghcr.io/s1dny/paste:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - name: http
               containerPort: 3000
