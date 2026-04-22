@@ -28,7 +28,22 @@ in
     allowedTCPPorts = [ 22 6443 ];
   };
 
-  virtualisation.docker.enable = true;
+  virtualisation.docker = {
+    enable = true;
+    daemon.settings = {
+      log-driver = "json-file";
+      log-opts = {
+        max-size = "10m";
+        max-file = "5";
+      };
+    };
+  };
+
+  services.journald.extraConfig = ''
+    SystemMaxUse=1G
+    RuntimeMaxUse=256M
+    MaxRetentionSec=14day
+  '';
 
   services.openssh = {
     enable = true;
